@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ritmo — Turni &amp; Finanze</title>
+  <meta name="theme-color" content="#0d0f14" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <script type="module">
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+    env.allowLocalModels = false;
+    window.RitmoLocalAI = {
+      generator: null,
+      loadingPromise: null,
+      async getExtractor() {
+        if (this.generator) return this.generator;
+        if (!this.loadingPromise) {
+          this.loadingPromise = pipeline('text2text-generation', 'Xenova/LaMini-Flan-T5-248M');
+        }
+        this.generator = await this.loadingPromise;
+        return this.generator;
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg-canvas: #0d0f14;
+      --bg-surface: #151921;
+      --bg-surface-elevated: #1b202b;
+      --border-subtle: #232936;
+      --text-primary: #f4f6fa;
+      --text-muted: #8892a4;
+      --accent-lime: #d4f824;
+      --accent-lime-hover: #c5eb12;
+      --accent-lime-text: #0d0f14;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      margin: 0; padding: 0;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0d0f14; }
+    ::-webkit-scrollbar-thumb { background: #252c3a; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #354054; }
+    .saas-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      transition: border-color .18s ease, transform .18s ease;
+    }
+    .saas-card-sub { background-color: #11151d; border: 1px solid #202633; border-radius: 12px; }
+    .dashed-empty { border: 1px dashed #2b3344; border-radius: 12px; background-color: rgba(17,21,29,.55); }
+    .lime-btn {
+      background-color: var(--accent-lime);
+      color: var(--accent-lime-text);
+      font-weight: 600;
+      transition: background-color .15s ease, transform .12s ease;
+    }
+    .lime-btn:hover { background-color: var(--accent-lime-hover); }
+    .lime-btn:active { transform: scale(.98); }
+    .nav-item-active { background-color: #1c222e; color: #fff; font-weight: 600; }
+    .modal-backdrop { background-color: rgba(5,7,11,.78); backdrop-filter: blur(6px); }
+  </style>
+</head>
+<body class="min-h-screen bg-[#0d0f14] text-[#f4f6fa] antialiased selection:bg-[#d4f824] selection:text-[#0d0f14]">
+
+<!-- MOBILE TOP HEADER -->
+<header class="lg:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#0d0f14]/95 backdrop-blur border-b border-[#1e2430]">
+  <div class="flex items-center gap-2.5 min-w-0">
+    <div class="w-8 h-8 rounded-full bg-[#151921] border border-[#2a3344] flex items-center justify-center shrink-0">
+      <svg viewBox="0 0 24 24" class="w-4 h-4 text-[#d4f824]" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6H21"/></svg>
+    </div>
+    <div class="truncate">
+      <div class="text-sm font-bold text-white">Ritmo</div>
+      <div id="mobile-profile-sub" class="text-[11px] text-[#8892a4] truncate">Turni &amp; finanze</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-2 shrink-0">
+    <button onclick="toggleLanguageQuick()" class="px-2.5 py-1.5 rounded-lg bg-[#151921] border border-[#232936] text-xs font-semibold text-[#cbd5e1] flex items-center gap-1">
+      <i data-lucide="globe" class="w-3.5 h-3.5 text-[#8892a4]"></i>
+      <span id="mobile-lang-label">IT</span>
+    </button>
+    <button onclick="openAuthModal()" class="px-2.5 py-1.5 rounded-lg bg-[#151921] border border-[#232936] text-xs font-medium text-[#cbd5e1] flex items-center gap-1.5 max-w-[125px]">
+      <i data-lucide="user" class="w-3.5 h-3.5 text-[#8892a4] shrink-0"></i>
+      <span id="mobile-user-label" class="truncate">Profilo</span>
+    </button>
+  </div>
+</header>
+
+<div class="flex min-h-screen w-full">
+  <!-- DESKTOP SIDEBAR -->
+  <aside class="hidden lg:flex lg:flex-col lg:w-[232px] lg:shrink-0 lg:fixed lg:inset-y-0 lg:left-0 bg-[#11141b] border-r border-[#1e2430] px-3.5 py-4 justify-between z-30">
+    <div class="space-y-5">
+      <div class="flex items-center justify-between px-1.5">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-[#151921] border border-[#2a3344] flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 text-[#d4f824]" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6H21"/></svg>
+          </div>
+          <div class="min-w-0">
+            <div class="text-[15px] font-bold text-white tracking-tight">Ritmo</div>
+            <div id="sidebar-profile-sub" class="text-[11px] text-[#8892a4] truncate">Turni &amp; finanze</div>
+          </div>
+        </div>
+        <button onclick="openAuthModal()" class="w-7 h-7 rounded-lg hover:bg-[#1b202b] flex items-center justify-center text-[#8892a4] hover:text-white transition-colors">
+          <i data-lucide="users" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <button onclick="openAuthModal()" class="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[#171c26] hover:bg-[#1e2430] border border-[#242b3a] text-xs transition-colors">
+        <span class="flex items-center gap-2 min-w-0">
+          <i data-lucide="user-check" class="w-3.5 h-3.5 text-[#d4f824] shrink-0"></i>
+          <span id="sidebar-user-name" class="font-medium text-slate-200 truncate">Account</span>
+        </span>
+        <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-[#8892a4] shrink-0"></i>
+      </button>
+
+      <nav id="desktop-nav" class="space-y-1"></nav>
+    </div>
+
+    <div class="pt-4 border-t border-[#232936] space-y-2.5">
+      <div id="sidebar-lang-label" class="text-[10px] font-semibold tracking-wider text-[#8892a4] px-1 uppercase">LINGUA</div>
+      <div class="grid grid-cols-2 gap-1.5 bg-[#0d0f14] p-1 rounded-xl border border-[#232936]">
+        <button id="lang-it-btn" onclick="setLanguage('it')" class="py-1.5 px-2 rounded-lg text-xs font-semibold transition-all">Italiano</button>
+        <button id="lang-en-btn" onclick="setLanguage('en')" class="py-1.5 px-2 rounded-lg text-xs font-semibold transition-all">English</button>
+      </div>
+      <div id="sidebar-device-label" class="text-[11px] text-[#6e7787] text-center pt-0.5">Ritmo · Dati salvati sul dispositivo</div>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="flex-1 lg:pl-[232px] min-w-0 flex flex-col min-h-screen">
+    <main id="app-main" class="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 lg:pb-10"></main>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav id="mobile-bottom-nav" class="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-[#11141b]/95 backdrop-blur border-t border-[#232936] px-1 py-1.5 flex items-center justify-around"></nav>
+
+<!-- MODAL -->
+<div id="modal-root" class="fixed inset-0 z-50 hidden modal-backdrop items-center justify-center p-3 sm:p-5 overflow-y-auto">
+  <div id="modal-card" class="w-full max-w-lg saas-card bg-[#151921] border border-[#2a3344] p-5 sm:p-6 shadow-2xl my-auto max-h-[90vh] overflow-y-auto"></div>
+</div>
+
+<!-- TOAST -->
+<div id="toast-root" class="fixed bottom-20 lg:bottom-6 right-4 z-50 hidden pointer-events-none">
+  <div id="toast-msg" class="px-4 py-2.5 rounded-xl bg-[#1b2230] border border-[#d4f824]/40 text-xs sm:text-sm font-medium text-white shadow-xl flex items-center gap-2">
+    <span class="w-2 h-2 rounded-full bg-[#d4f824]"></span>
+    <span id="toast-text"></span>
+  </div>
+</div>
+
+<script>
+// PDF.js worker
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function escapeHTML(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeRegex(str) {
+  return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ============================================================
+// CONSTANTS & I18N
+// ============================================================
+const STORAGE_PREFIX = 'ritmo_v1_user_';
+const ACTIVE_USER_KEY = 'ritmo_v1_active_user';
+const USER_INDEX_KEY = 'ritmo_v1_users_index';
+
+const DEFAULT_SHIFT_TYPES = [
+  { id: 'morning',   label: 'Mattina',       color: '#38bdf8', defaultStart: '08:00', defaultEnd: '14:00' },
+  { id: 'afternoon', label: 'Pomeriggio',    color: '#f59e0b', defaultStart: '14:00', defaultEnd: '20:00' },
+  { id: 'night',     label: 'Notte',         color: '#a78bfa', defaultStart: '22:00', defaultEnd: '06:00' },
+  { id: 'rest',      label: 'Riposo',        color: '#22c55e', defaultStart: '',      defaultEnd: ''      },
+  { id: 'overtime',  label: 'Straordinario', color: '#d4f824', defaultStart: '18:00', defaultEnd: '21:00' },
+  { id: 'other',     label: 'Altro',         color: '#94a3b8', defaultStart: '09:00', defaultEnd: '17:00' },
+];
+
+const DEFAULT_EXPENSE_CATEGORIES = [
+  'Carburante','Alimentari','Ristoranti','Shopping','Palestra','Auto','Trasporti','Casa','Svago','Altro'
+];
+
+const DEFAULT_SHORTCUTS = [
+  { id: 'sc_1', label: '+ 10.00 € Carburante', amount: 10,  category: 'Carburante', description: 'Carburante' },
+  { id: 'sc_2', label: '+ 5.00 € Caffè',        amount: 5,   category: 'Ristoranti', description: 'Caffè' },
+  { id: 'sc_3', label: '+ 20.00 € Spesa',        amount: 20,  category: 'Alimentari', description: 'Spesa rapida' },
+  { id: 'sc_4', label: '+ 30.00 € Ristorante',   amount: 30,  category: 'Ristoranti', description: 'Ristorante' },
+];
+
+const I18N = {
+  it: {
+    nav_dashboard:'Dashboard', nav_turni:'Turni', nav_importa:'Importa turni',
+    nav_assenze:'Assenze', nav_entrate:'Entrate', nav_spese:'Uscite',
+    nav_abbonamenti:'Abbonamenti', nav_riepilogo:'Riepilogo', nav_impostazioni:'Impostazioni',
+    monthBalance:'SALDO DEL MESE', monthBalanceSub:'avanzo del mese',
+    monthIncome:'ENTRATE MESE', monthIncomeSub:'stipendio impostato',
+    monthExpenses:'USCITE MESE', workedHours:'ORE LAVORATE',
+    overtimeHours:'STRAORDINARI', noOvertime:'nessuno straordinario',
+    todayUpcomingTitle:'Oggi e prossimi turni', openCalendar:'Calendario',
+    noShiftToday:'Nessun turno registrato per oggi.', addShiftCta:'Aggiungi un turno',
+    noOtherShift:'Nessun altro turno in programma.',
+    restDaysInMonth:'Giorni di riposo nel mese',
+    remindersTitle:'Promemoria', next24hBadge:'Prossime 24 ore',
+    shiftReminders:'Promemoria turni', renewalReminders:'Promemoria rinnovi',
+    noShift24h:'Nessun turno nelle prossime 24 ore.',
+    noRenewal24h:'Nessun rinnovo nelle prossime 24 ore.',
+    monthSummaryTitle:'Bilancio del mese',
+    incomeRow:'Entrate', expensesRow:'Uscite', subscriptionsRow:'Abbonamenti', balanceRow:'Saldo',
+    spentQuota:'Quota delle entrate già spesa', fullSummaryLink:'Vedi il riepilogo completo',
+    last6Months:'Ultimi 6 mesi', upcomingActivities:'Prossime attività',
+    manageLink:'Gestisci', noPendingActivities:'Nessuna attività in sospeso.',
+    upcomingRenewals:'Rinnovi in arrivo', allLink:'Tutti',
+    noUpcomingRenewals:'Nessun rinnovo in arrivo.',
+    scheduledAbsences:'Assenze programmate', noScheduledAbsences:'Nessuna assenza programmata.',
+    movementsLabel:'movimenti', activeCountLabel:'attivi',
+    shiftsInMonthLabel:'turni nel mese', overtimeInMonthLabel:'registrati nel mese',
+    nextShiftLabel:'Prossimo turno', savedOnDevice:'Ritmo · Dati salvati sul dispositivo',
+    langHeaderLabel:'LINGUA',
+    calEyebrow:'CALENDARIO', calTitle:'I tuoi turni',
+    importBtn:'Importa', newShiftBtn:'Nuovo turno',
+    todayBtn:'Oggi', viewMonth:'Mese', viewWeek:'Settimana', viewDay:'Giorno',
+    noShiftDay:'Nessun turno per questa giornata.',
+    importEyebrow:'IMPORTAZIONE', importTitle:'Carica il prospetto turni',
+    importSubtitle:"Fotografa il foglio turni o carica il PDF: Ritmo estrae turni, riposi e assenze, poi ti mostra l'anteprima. Nulla viene salvato senza la tua conferma.",
+    targetNameLabel:'IL TUO NOME COME COMPARE NEL DOCUMENTO',
+    targetNameHint:'Nei prospetti con più dipendenti vengono importati solo i turni intestati a questo nome. Lascia vuoto per importare tutte le righe.',
+    dropTitle:'Trascina qui il file oppure scegli dal dispositivo',
+    dropSub:'PDF, JPG, PNG · max 500 MB',
+    importFileBtn:'Importa il file', takePhotoBtn:'Scatta foto',
+    dupNotice:"I turni già presenti con la stessa data e orario vengono segnalati come duplicati per evitarne l'inserimento involontario.",
+    pasteTextLabel:'Oppure incolla testo / comunicazione di servizio da analizzare',
+    analyzeTextBtn:'Analizza testo', previewTitle:'Anteprima dati individuati',
+    previewSub:'Controlla o modifica le righe prima di confermare l\'inserimento.',
+    confirmImportBtn:'Conferma e importa selezionati',
+    docArchiveTitle:'Archivio documenti analizzati', noDocArchive:'Nessun documento salvato in archivio.',
+    consultBtn:'Consulta',
+    absEyebrow:'ANNO CORRENTE', absTitle:'Assenze e straordinari',
+    newAbsenceBtn:'Nuova assenza', leaveCard:'FERIE E LICENZE',
+    permitCard:'PERMESSI E RECUPERI', sickCard:'MALATTIA', overtimeCard:'STRAORDINARI',
+    absLogTitle:'Registro assenze', absLogSub:'Riepilogo mensile e annuale',
+    noAbsences:'Nessuna assenza registrata.',
+    noAbsencesHint:'Aggiungi ferie, permessi o straordinari per tenere traccia delle giornate.',
+    incEyebrow:'ENTRATE', incTitle:'Stipendio e compensi', newIncomeBtn:'Nuova entrata',
+    yearIncomeCard:'ENTRATE ANNO', currMonthCard:'MESE CORRENTE', monthlyAvgCard:'MEDIA MENSILE',
+    incHistoryTitle:'Storico entrate', compareByMonthLink:'Confronto per mese',
+    noIncome:'Nessuna entrata registrata.',
+    noIncomeHint:'Imposta lo stipendio mensile per iniziare a calcolare il saldo.',
+    expEyebrow:'USCITE', expTitle:'Uscite quotidiane', newExpenseBtn:'Nuova uscita',
+    currYearCard:'ANNO CORRENTE', filteredTotalCard:'TOTALE FILTRATO', movementsCard:'MOVIMENTI',
+    shortcutsTitle:'Scorciatoie rapide', customizeBtn:'Personalizza',
+    expListTitle:'Elenco uscite', searchPlaceholder:'Cerca descrizione o categoria',
+    allCategoriesOpt:'Tutte le categorie', noExpenseFilter:'Nessuna uscita per questo filtro.',
+    subEyebrow:'RICORRENTI', subTitle:'Abbonamenti', newSubBtn:'Nuovo abbonamento',
+    monthlyCostCard:'COSTO MENSILE', yearlyCostCard:'COSTO ANNUALE', statusCard:'STATO',
+    yourSubsTitle:'I tuoi abbonamenti',
+    allFilter:'Tutti', activeFilter:'Attivi', pausedFilter:'Sospesi', cancelledFilter:'Disdetti',
+    noSubs:'Nessun abbonamento registrato.',
+    noSubsHint:'Aggiungi Netflix, palestra o assicurazioni per controllare le uscite ricorrenti.',
+    sumEyebrow:'RIEPILOGO', sumTitle:'La tua situazione economica',
+    yearOutCard:'USCITE ANNO', balanceCard:'SALDO', incomeSpentCard:'ENTRATE SPESE',
+    last12MonthsTitle:'Entrate e uscite negli ultimi 12 mesi',
+    expByCatTitle:'Uscite per categoria', noExpYear:"Nessuna uscita registrata per quest'anno.",
+    monthlyComparisonTitle:'Confronto mensile', last12MonthsBadge:'Ultimi 12 mesi',
+    noMovementsYet:'Ancora nessun movimento registrato.',
+    cfgEyebrow:'IMPOSTAZIONI', cfgTitle:'Profilo, categorie e dati',
+    profileBoxTitle:'Profilo lavorativo', profileNameLabel:'Nome / Identificativo profilo',
+    profileRoleLabel:'Ruolo / Qualifica', profileDeptLabel:'Reparto / Sede predefinita',
+    saveProfileBtn:'Salva profilo', dashCustTitle:'Personalizzazione dashboard',
+    dashCustSub:'Scegli quali blocchi mostrare nella schermata iniziale.',
+    catCustTitle:'Categorie uscite personalizzabili', newCatPlaceholder:'Nuova categoria uscita...',
+    addBtn:'Aggiungi', backupBoxTitle:'Esportazione, backup e reset',
+    exportAllJsonBtn:'Esporta tutti i profili (JSON)', exportCsvBtn:'Esporta uscite CSV',
+    restoreJsonBtn:'Ripristina JSON', resetProfileBtn:'Azzera dati profilo', deleteBtn:'Elimina',
+  },
+  en: {
+    nav_dashboard:'Dashboard', nav_turni:'Shifts', nav_importa:'Import shifts',
+    nav_assenze:'Absences', nav_entrate:'Income', nav_spese:'Expenses',
+    nav_abbonamenti:'Subscriptions', nav_riepilogo:'Summary', nav_impostazioni:'Settings',
+    monthBalance:'MONTH BALANCE', monthBalanceSub:'monthly net',
+    monthIncome:'MONTH INCOME', monthIncomeSub:'configured salary',
+    monthExpenses:'MONTH EXPENSES', workedHours:'WORKED HOURS',
+    overtimeHours:'OVERTIME', noOvertime:'no overtime',
+    todayUpcomingTitle:'Today & upcoming shifts', openCalendar:'Calendar',
+    noShiftToday:'No shift scheduled for today.', addShiftCta:'Add a shift',
+    noOtherShift:'No other upcoming shift.',
+    restDaysInMonth:'Rest days this month',
+    remindersTitle:'Reminders', next24hBadge:'Next 24 hours',
+    shiftReminders:'Shift reminders', renewalReminders:'Renewal reminders',
+    noShift24h:'No shift in the next 24 hours.',
+    noRenewal24h:'No renewal in the next 24 hours.',
+    monthSummaryTitle:'Monthly balance',
+    incomeRow:'Income', expensesRow:'Expenses', subscriptionsRow:'Subscriptions', balanceRow:'Balance',
+    spentQuota:'Share of income spent', fullSummaryLink:'View full summary',
+    last6Months:'Last 6 months', upcomingActivities:'Upcoming tasks',
+    manageLink:'Manage', noPendingActivities:'No pending tasks.',
+    upcomingRenewals:'Upcoming renewals', allLink:'All',
+    noUpcomingRenewals:'No upcoming renewals.',
+    scheduledAbsences:'Planned absences', noScheduledAbsences:'No planned absences.',
+    movementsLabel:'entries', activeCountLabel:'active',
+    shiftsInMonthLabel:'shifts this month', overtimeInMonthLabel:'logged this month',
+    nextShiftLabel:'Next shift', savedOnDevice:'Ritmo · Data saved on device',
+    langHeaderLabel:'LANGUAGE',
+    calEyebrow:'CALENDAR', calTitle:'Your shifts',
+    importBtn:'Import', newShiftBtn:'New shift',
+    todayBtn:'Today', viewMonth:'Month', viewWeek:'Week', viewDay:'Day',
+    noShiftDay:'No shift scheduled for this day.',
+    importEyebrow:'IMPORT', importTitle:'Upload shift schedule',
+    importSubtitle:'Photograph the shift sheet or upload the PDF: Ritmo extracts shifts, rest days and absences, then shows a preview. Nothing is saved without your confirmation.',
+    targetNameLabel:'YOUR NAME AS IT APPEARS IN THE DOCUMENT',
+    targetNameHint:'In multi-employee rosters, only shifts matching this name are imported. Leave blank to import all rows.',
+    dropTitle:'Drag the file here or choose from your device',
+    dropSub:'PDF, JPG, PNG · max 500 MB',
+    importFileBtn:'Import file', takePhotoBtn:'Take photo',
+    dupNotice:'Shifts already present on the same date and time are flagged as duplicates to prevent accidental entries.',
+    pasteTextLabel:'Or paste text / shift notice to analyze',
+    analyzeTextBtn:'Analyze text', previewTitle:'Extracted data preview',
+    previewSub:'Review or edit rows before confirming import.',
+    confirmImportBtn:'Confirm and import selected',
+    docArchiveTitle:'Analyzed documents archive', noDocArchive:'No documents saved in archive.',
+    consultBtn:'Inspect',
+    absEyebrow:'CURRENT YEAR', absTitle:'Absences & overtime',
+    newAbsenceBtn:'New absence', leaveCard:'LEAVE & VACATION',
+    permitCard:'PERMITS & COMP TIME', sickCard:'SICK LEAVE', overtimeCard:'OVERTIME',
+    absLogTitle:'Absence log', absLogSub:'Monthly and annual summary',
+    noAbsences:'No absences recorded.',
+    noAbsencesHint:'Add vacation, permits or overtime to track days off.',
+    incEyebrow:'INCOME', incTitle:'Salary & earnings', newIncomeBtn:'New income',
+    yearIncomeCard:'YEAR INCOME', currMonthCard:'CURRENT MONTH', monthlyAvgCard:'MONTHLY AVG',
+    incHistoryTitle:'Income history', compareByMonthLink:'Compare by month',
+    noIncome:'No income recorded.',
+    noIncomeHint:'Set your monthly salary to start calculating your balance.',
+    expEyebrow:'EXPENSES', expTitle:'Daily expenses', newExpenseBtn:'New expense',
+    currYearCard:'CURRENT YEAR', filteredTotalCard:'FILTERED TOTAL', movementsCard:'ENTRIES',
+    shortcutsTitle:'Quick shortcuts', customizeBtn:'Customize',
+    expListTitle:'Expenses list', searchPlaceholder:'Search description or category',
+    allCategoriesOpt:'All categories', noExpenseFilter:'No expenses match this filter.',
+    subEyebrow:'RECURRING', subTitle:'Subscriptions', newSubBtn:'New subscription',
+    monthlyCostCard:'MONTHLY COST', yearlyCostCard:'YEARLY COST', statusCard:'STATUS',
+    yourSubsTitle:'Your subscriptions',
+    allFilter:'All', activeFilter:'Active', pausedFilter:'Paused', cancelledFilter:'Cancelled',
+    noSubs:'No subscriptions recorded.',
+    noSubsHint:'Add Netflix, gym or insurance to track recurring bills.',
+    sumEyebrow:'SUMMARY', sumTitle:'Your financial overview',
+    yearOutCard:'YEAR EXPENSES', balanceCard:'BALANCE', incomeSpentCard:'INCOME SPENT',
+    last12MonthsTitle:'Income & expenses over the last 12 months',
+    expByCatTitle:'Expenses by category', noExpYear:'No expenses recorded this year.',
+    monthlyComparisonTitle:'Monthly comparison', last12MonthsBadge:'Last 12 months',
+    noMovementsYet:'No transactions recorded yet.',
+    cfgEyebrow:'SETTINGS', cfgTitle:'Profile, categories & data',
+    profileBoxTitle:'Work profile', profileNameLabel:'Name / Profile identifier',
+    profileRoleLabel:'Role / Title', profileDeptLabel:'Department / Default site',
+    saveProfileBtn:'Save profile', dashCustTitle:'Dashboard customization',
+    dashCustSub:'Choose which sections to show on the home screen.',
+    catCustTitle:'Customizable expense categories', newCatPlaceholder:'New expense category...',
+    addBtn:'Add', backupBoxTitle:'Export, backup & reset',
+    exportAllJsonBtn:'Export all profiles (JSON)', exportCsvBtn:'Export expenses CSV',
+    restoreJsonBtn:'Restore JSON', resetProfileBtn:'Reset profile data', deleteBtn:'Delete',
+  }
+};
+
+function createEmptyUserState(username) {
+  return {
+    profile: { name: username || '', role: '', department: '' },
+    aiConfig: { provider: 'gemini', apiKey: '', model: 'gemini-2.5-flash', customEndpoint: '' },
+    shiftTypes: JSON.parse(JSON.stringify(DEFAULT_SHIFT_TYPES)),
+    shifts: [], absences: [], incomes: [], expenses: [], subscriptions: [],
+    activities: [], importedDocs: [],
+    expenseCategories: [...DEFAULT_EXPENSE_CATEGORIES],
+    shortcuts: JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS)),
+    dashboardWidgets: { showKpis: true, showShifts: true, showReminders: true, showBalanceChart: true, showBottomPanels: true },
+  };
+}
+
+let currentUserId = localStorage.getItem(ACTIVE_USER_KEY) || 'Profilo';
+let currentRoute = 'dashboard';
+let calendarViewMode = 'month';
+let calendarCursorDate = new Date();
+let expenseSearchQuery = '';
+let expenseFilterMonth = new Date().toISOString().slice(0, 7);
+let expenseFilterCategory = 'ALL';
+let subscriptionStatusFilter = 'ALL';
+let pendingExtractedRows = [];
+let state = { lang: localStorage.getItem('ritmo_v1_lang') || 'it', ...createEmptyUserState(currentUserId) };
+
+function t(key) { return (I18N[state.lang]?.[key]) || I18N.it[key] || key; }
+
+// ============================================================
+// STORAGE & MULTI-PROFILE
+// ============================================================
+function getUsersIndex() {
+  try { const l = JSON.parse(localStorage.getItem(USER_INDEX_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch(_){ return []; }
+}
+function registerUserInIndex(username) {
+  if (!username) return;
+  const idx = getUsersIndex();
+  if (!idx.includes(username)) { idx.push(username); localStorage.setItem(USER_INDEX_KEY, JSON.stringify(idx)); }
+}
+function loadUserState(username) {
+  currentUserId = username || 'Profilo';
+  localStorage.setItem(ACTIVE_USER_KEY, currentUserId);
+  registerUserInIndex(currentUserId);
+  const raw = localStorage.getItem(STORAGE_PREFIX + currentUserId);
+  const base = createEmptyUserState(currentUserId);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      state = { lang: localStorage.getItem('ritmo_v1_lang') || parsed.lang || 'it', ...base, ...parsed,
+        profile: { ...base.profile, ...(parsed.profile || {}) },
+        aiConfig: { ...base.aiConfig, ...(parsed.aiConfig || {}) },
+        dashboardWidgets: { ...base.dashboardWidgets, ...(parsed.dashboardWidgets || {}) },
+      };
+    } catch(err) { state = { lang: localStorage.getItem('ritmo_v1_lang') || 'it', ...base }; }
+  } else { state = { lang: localStorage.getItem('ritmo_v1_lang') || 'it', ...base }; saveState(); }
+  pendingExtractedRows = [];
+  updateChromeLabels();
+}
+function saveState() {
+  try {
+    localStorage.setItem(ACTIVE_USER_KEY, currentUserId);
+    registerUserInIndex(currentUserId);
+    const { lang, ...payload } = state;
+    localStorage.setItem(STORAGE_PREFIX + currentUserId, JSON.stringify(payload));
+    localStorage.setItem('ritmo_v1_lang', lang || 'it');
+  } catch(err) { showToast('Spazio di archiviazione locale pieno.'); }
+}
+function setupPWA() {
+  try {
+    const manifest = { name:'Ritmo — Turni & Finanze', short_name:'Ritmo', start_url:'.', display:'standalone', background_color:'#0d0f14', theme_color:'#0d0f14', icons:[{ src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23151921'/%3E%3Cpath d='M10 34h10l6-14 12 28 6-14h14' fill='none' stroke='%23d4f824' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E", sizes:'64x64', type:'image/svg+xml' }] };
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+    const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+  } catch(_){}
+}
+
+// ============================================================
+// DATE & CURRENCY HELPERS
+// ============================================================
+function toISODate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function formatDateIT(iso) {
+  if (!iso) return '';
+  const p = iso.split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+}
+function formatFullDateHeader(d) {
+  return d.toLocaleDateString(state.lang === 'en' ? 'en-US' : 'it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+function formatCurrency(val) {
+  const num = Number(val) || 0;
+  return num.toLocaleString(state.lang === 'en' ? 'en-US' : 'it-IT', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' €';
+}
+function formatHours(h) { return `${Math.round((Number(h)||0)*10)/10}h`; }
+function calcShiftDurationHours(s, e) {
+  if (!s || !e) return 0;
+  const [sh,sm] = s.split(':').map(Number), [eh,em] = e.split(':').map(Number);
+  if ([sh,sm,eh,em].some(Number.isNaN)) return 0;
+  let start = sh*60+sm, end = eh*60+em;
+  if (end < start) end += 1440;
+  return Math.max(0, (end-start)/60);
+}
+function getShiftType(id) { return state.shiftTypes.find(s => s.id === id) || state.shiftTypes[state.shiftTypes.length-1]; }
+
+function isIncomeActiveInMonth(inc, year, m) {
+  if (!inc?.date) return false;
+  const [iy,im] = inc.date.split('-').map(Number);
+  if (inc.recurringMonthly) return year*12+m >= iy*12+(im-1);
+  return iy===year && (im-1)===m;
+}
+function isExpenseActiveInMonth(exp, year, m) {
+  if (!exp?.date) return false;
+  const [ey,em] = exp.date.split('-').map(Number);
+  if (exp.recurringMonthly) return year*12+m >= ey*12+(em-1);
+  return ey===year && (em-1)===m;
+}
+function getSubscriptionMonthlyEquivalent(sub) {
+  if (!sub || sub.status !== 'active') return 0;
+  const a = Number(sub.amount)||0;
+  if (sub.frequency === 'yearly') return a/12;
+  if (sub.frequency === 'quarterly') return a/3;
+  if (sub.frequency === 'weekly') return (a*52)/12;
+  return a;
+}
+function getAnnualIncomeTotal(year) {
+  let t = 0;
+  for (let m=0; m<12; m++) state.incomes.forEach(i => { if (isIncomeActiveInMonth(i,year,m)) t += Number(i.amount)||0; });
+  return t;
+}
+function getAnnualExpensesTotal(year) {
+  let t = 0;
+  for (let m=0; m<12; m++) state.expenses.forEach(e => { if (isExpenseActiveInMonth(e,year,m)) t += Number(e.amount)||0; });
+  return t;
+}
+function getMonthMetrics(year, m) {
+  const prefix = `${year}-${String(m+1).padStart(2,'0')}`;
+  let income=0; state.incomes.forEach(i => { if(isIncomeActiveInMonth(i,year,m)) income += Number(i.amount)||0; });
+  let expenses=0, expensesCount=0;
+  state.expenses.forEach(e => {
+    if(isExpenseActiveInMonth(e,year,m)) expenses += Number(e.amount)||0;
+    if(e.date?.startsWith(prefix)) expensesCount++;
+  });
+  const activeSubs = state.subscriptions.filter(s => s.status==='active');
+  const subscriptionsMonthly = activeSubs.reduce((a,s) => a+getSubscriptionMonthlyEquivalent(s), 0);
+  const monthShifts = state.shifts.filter(s => s.date?.startsWith(prefix));
+  let workedHours=0, restDays=0, overtimeHours=0;
+  monthShifts.forEach(s => {
+    if (s.typeId==='rest') restDays++;
+    else workedHours += calcShiftDurationHours(s.start, s.end);
+    if (s.typeId==='overtime') overtimeHours += calcShiftDurationHours(s.start, s.end);
+  });
+  state.absences.forEach(ab => { if(ab.category==='overtime' && ab.startDate?.startsWith(prefix)) overtimeHours += Number(ab.hours)||0; });
+  const balance = income - expenses - subscriptionsMonthly;
+  const spentPct = income > 0 ? Math.min(100, Math.round(((expenses+subscriptionsMonthly)/income)*100)) : 0;
+  return { income, expenses, expensesCount, subscriptionsMonthly, activeSubsCount:activeSubs.length, workedHours, overtimeHours, restDays, shiftsCount:monthShifts.length, balance, spentPct };
+}
+
+// ============================================================
+// NAVIGATION & CHROME
+// ============================================================
+const NAV_ITEMS = [
+  { id:'dashboard',     icon:'layout-grid',  key:'nav_dashboard',    mobile:true  },
+  { id:'turni',         icon:'calendar',     key:'nav_turni',        mobile:true  },
+  { id:'importa',       icon:'upload-cloud', key:'nav_importa',      mobile:false },
+  { id:'assenze',       icon:'umbrella',     key:'nav_assenze',      mobile:true  },
+  { id:'entrate',       icon:'trending-up',  key:'nav_entrate',      mobile:true  },
+  { id:'spese',         icon:'receipt',      key:'nav_spese',        mobile:true  },
+  { id:'abbonamenti',   icon:'refresh-cw',   key:'nav_abbonamenti',  mobile:true  },
+  { id:'riepilogo',     icon:'pie-chart',    key:'nav_riepilogo',    mobile:true  },
+  { id:'impostazioni',  icon:'settings',     key:'nav_impostazioni', mobile:false },
+];
+
+function navigate(routeId) { currentRoute = routeId; renderCurrentView(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setLanguage(lang) { state.lang = lang==='en'?'en':'it'; saveState(); updateChromeLabels(); renderCurrentView(); }
+function toggleLanguageQuick() { setLanguage(state.lang==='it'?'en':'it'); }
+
+function updateChromeLabels() {
+  const name = state.profile.name || currentUserId || 'Profilo';
+  document.getElementById('sidebar-user-name').textContent = name;
+  document.getElementById('mobile-user-label').textContent = name;
+  const sub = state.profile.role || (state.lang==='en'?'Shifts & finances':'Turni & finanze');
+  document.getElementById('sidebar-profile-sub').textContent = sub;
+  document.getElementById('mobile-profile-sub').textContent = sub;
+
+  document.getElementById('lang-it-btn').className = state.lang==='it'
+    ? 'py-1.5 px-2 rounded-lg text-xs font-semibold bg-[#d4f824] text-[#0d0f14]'
+    : 'py-1.5 px-2 rounded-lg text-xs font-semibold text-[#8892a4] hover:text-white';
+  document.getElementById('lang-en-btn').className = state.lang==='en'
+    ? 'py-1.5 px-2 rounded-lg text-xs font-semibold bg-[#d4f824] text-[#0d0f14]'
+    : 'py-1.5 px-2 rounded-lg text-xs font-semibold text-[#8892a4] hover:text-white';
+  document.getElementById('mobile-lang-label').textContent = state.lang.toUpperCase();
+
+  const lbl = document.getElementById('sidebar-lang-label');
+  const dev = document.getElementById('sidebar-device-label');
+  if (lbl) lbl.textContent = t('langHeaderLabel');
+  if (dev) dev.textContent = t('savedOnDevice');
+
+  document.getElementById('desktop-nav').innerHTML = NAV_ITEMS.map(item => {
+    const active = currentRoute === item.id;
+    return `<button onclick="navigate('${item.id}')" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] transition-colors ${active?'nav-item-active':'text-[#9aa4b6] hover:text-white hover:bg-[#171c26]'}">
+      <i data-lucide="${item.icon}" class="w-4 h-4 ${active?'text-[#d4f824]':'text-[#7d8798]'}"></i>
+      <span class="truncate">${t(item.key)}</span>
+    </button>`;
+  }).join('');
+
+  const mobileItems = NAV_ITEMS.filter(n => n.mobile);
+  document.getElementById('mobile-bottom-nav').innerHTML = mobileItems.map(item => {
+    const active = currentRoute === item.id;
+    return `<button onclick="navigate('${item.id}')" class="flex flex-col items-center justify-center py-1 px-1 rounded-lg min-w-0 flex-1 ${active?'text-[#d4f824]':'text-[#8892a4]'}">
+      <i data-lucide="${item.icon}" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium mt-0.5 truncate max-w-full">${t(item.key)}</span>
+    </button>`;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderCurrentView() {
+  updateChromeLabels();
+  const main = document.getElementById('app-main');
+  switch (currentRoute) {
+    case 'dashboard':     main.innerHTML = renderDashboard(); break;
+    case 'turni':         main.innerHTML = renderCalendarView(); break;
+    case 'importa':       main.innerHTML = renderImportView(); if(pendingExtractedRows.length>0) renderImportPreviewList(); break;
+    case 'assenze':       main.innerHTML = renderAbsencesView(); break;
+    case 'entrate':       main.innerHTML = renderIncomesView(); break;
+    case 'spese':         main.innerHTML = renderExpensesView(); break;
+    case 'abbonamenti':   main.innerHTML = renderSubscriptionsView(); break;
+    case 'riepilogo':     main.innerHTML = renderSummaryView(); break;
+    case 'impostazioni':  main.innerHTML = renderSettings(); break;
+    default:              main.innerHTML = renderDashboard();
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+// ============================================================
+// MODAL & TOAST
+// ============================================================
+function openModal(html) {
+  document.getElementById('modal-card').innerHTML = html;
+  const root = document.getElementById('modal-root');
+  root.classList.remove('hidden');
+  root.classList.add('flex');
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) lucide.createIcons();
+}
+function closeModal() {
+  const root = document.getElementById('modal-root');
+  root.classList.add('hidden');
+  root.classList.remove('flex');
+  document.body.style.overflow = '';
+}
+document.getElementById('modal-root').addEventListener('click', e => { if(e.target === e.currentTarget) closeModal(); });
+
+let _toastTimer = null;
+function showToast(msg) {
+  document.getElementById('toast-text').textContent = msg;
+  const root = document.getElementById('toast-root');
+  root.classList.remove('hidden');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => root.classList.add('hidden'), 3000);
+}
+
+// ============================================================
+// AUTH / MULTI-PROFILE MODAL
+// ============================================================
+function openAuthModal() {
+  const users = getUsersIndex();
+  openModal(`
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Gestione profili</h3>
+      <button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="space-y-2 mb-4">
+      ${users.length === 0 ? `<div class="text-xs text-[#8892a4]">Nessun profilo salvato.</div>` : users.map(u => `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-[#11151d] border ${u===currentUserId?'border-[#d4f824]/50':'border-[#232936]'}">
+          <span class="text-sm font-semibold text-white">${escapeHTML(u)} ${u===currentUserId?'<span class="text-[10px] text-[#d4f824] ml-1">attivo</span>':''}</span>
+          <div class="flex items-center gap-2">
+            ${u!==currentUserId?`<button onclick="switchProfile('${escapeHTML(u)}')" class="px-2.5 py-1 rounded-lg bg-[#1a202c] hover:bg-[#242c3d] text-xs text-slate-200">Accedi</button>`:''}
+            ${users.length>1&&u!==currentUserId?`<button onclick="deleteProfile('${escapeHTML(u)}')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-xs">${t('deleteBtn')}</button>`:''}
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="border-t border-[#232936] pt-4 space-y-2">
+      <label class="block text-xs font-semibold text-[#9aa4b6]">Crea nuovo profilo</label>
+      <div class="flex gap-2">
+        <input id="new-profile-name" type="text" placeholder="Nome profilo..." class="flex-1 px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" />
+        <button onclick="createNewProfile()" class="lime-btn px-4 py-2 rounded-xl text-xs">Crea</button>
+      </div>
+    </div>
+  `);
+}
+function switchProfile(username) { loadUserState(username); closeModal(); renderCurrentView(); showToast(`Profilo "${username}" attivo.`); }
+function createNewProfile() {
+  const name = (document.getElementById('new-profile-name')?.value || '').trim();
+  if (!name) { showToast('Inserisci un nome profilo.'); return; }
+  loadUserState(name); closeModal(); renderCurrentView(); showToast(`Profilo "${name}" creato.`);
+}
+function deleteProfile(username) {
+  if (!confirm(`Eliminare il profilo "${username}" e tutti i suoi dati?`)) return;
+  localStorage.removeItem(STORAGE_PREFIX + username);
+  const idx = getUsersIndex().filter(u => u !== username);
+  localStorage.setItem(USER_INDEX_KEY, JSON.stringify(idx));
+  openAuthModal();
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboard() {
+  const now = new Date();
+  const todayISO = toISODate(now);
+  const metrics = getMonthMetrics(now.getFullYear(), now.getMonth());
+  const w = state.dashboardWidgets;
+
+  const todayShifts = state.shifts.filter(s => s.date === todayISO);
+  const upcomingShifts = state.shifts.filter(s => s.date > todayISO).sort((a,b) => a.date.localeCompare(b.date)||(a.start||'').localeCompare(b.start||''));
+  const nextShift = upcomingShifts[0] || null;
+
+  const next24hShifts = state.shifts.filter(s => {
+    if (!s.date) return false;
+    const dt = new Date(`${s.date}T${s.start||'00:00'}:00`);
+    const diff = dt.getTime() - now.getTime();
+    return diff >= -3600000 && diff <= 86400000;
+  });
+  const next24hRenewals = state.subscriptions.filter(sub => {
+    if (sub.status!=='active'||!sub.nextDate) return false;
+    const diff = new Date(`${sub.nextDate}T09:00:00`).getTime() - now.getTime();
+    return diff >= -3600000 && diff <= 86400000;
+  });
+
+  const last6Months = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const md = getMonthMetrics(d.getFullYear(), d.getMonth());
+    last6Months.push({
+      label: d.toLocaleDateString(state.lang==='en'?'en-US':'it-IT',{month:'short',year:'2-digit'}).replace('.','').toUpperCase(),
+      income: md.income, out: md.expenses+md.subscriptionsMonthly
+    });
+  }
+  const max6 = Math.max(100, ...last6Months.map(x => Math.max(x.income,x.out)));
+
+  const pendingActivities = state.activities.filter(a => !a.done);
+  const upcomingSubs = state.subscriptions.filter(s => s.status==='active'&&s.nextDate).sort((a,b)=>a.nextDate.localeCompare(b.nextDate));
+  const plannedAbsences = state.absences.filter(a=>(a.endDate||a.startDate)>=todayISO).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+
+  return `<div class="space-y-4 sm:space-y-5">
+    <h1 class="text-lg sm:text-xl font-bold text-white tracking-tight uppercase">${escapeHTML(formatFullDateHeader(now))}</h1>
+
+    ${w.showKpis ? `<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+      ${[
+        {label:t('monthBalance'), val:formatCurrency(metrics.balance), sub:t('monthBalanceSub'), color:metrics.balance>=0?'text-[#22c55e]':'text-rose-400', icon:'calendar', route:'riepilogo'},
+        {label:t('monthIncome'), val:formatCurrency(metrics.income), sub:t('monthIncomeSub'), color:'text-white', icon:'trending-up', route:'entrate'},
+        {label:t('monthExpenses'), val:formatCurrency(metrics.expenses), sub:`${metrics.expensesCount} ${t('movementsLabel')}`, color:'text-white', icon:'credit-card', route:'spese'},
+        {label:t('subscriptionsRow').toUpperCase(), val:formatCurrency(metrics.subscriptionsMonthly), sub:`${metrics.activeSubsCount} ${t('activeCountLabel')}`, color:'text-white', icon:'refresh-cw', route:'abbonamenti'},
+        {label:t('workedHours'), val:formatHours(metrics.workedHours), sub:`${metrics.shiftsCount} ${t('shiftsInMonthLabel')}`, color:'text-white', icon:'clock', route:'turni'},
+        {label:t('overtimeHours'), val:formatHours(metrics.overtimeHours), sub:metrics.overtimeHours>0?t('overtimeInMonthLabel'):t('noOvertime'), color:'text-white', icon:'zap', route:'assenze'},
+      ].map(k=>`<div onclick="navigate('${k.route}')" class="saas-card p-3.5 sm:p-4 cursor-pointer hover:border-[#343e52]">
+        <div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>${k.label}</span><i data-lucide="${k.icon}" class="w-3.5 h-3.5"></i></div>
+        <div class="text-xl sm:text-2xl font-bold mt-2 ${k.color}">${k.val}</div>
+        <div class="text-[11px] text-[#8892a4] mt-1">${k.sub}</div>
+      </div>`).join('')}
+    </div>` : ''}
+
+    ${w.showShifts ? `<div class="saas-card p-4 sm:p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm sm:text-base font-semibold text-white">${t('todayUpcomingTitle')}</h2>
+        <button onclick="navigate('turni')" class="text-xs text-[#9aa4b6] hover:text-white inline-flex items-center gap-1"><span>${t('openCalendar')}</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></button>
+      </div>
+      ${todayShifts.length===0 ? `<div class="dashed-empty py-6 px-4 text-center space-y-1">
+        <div class="text-xs sm:text-sm text-[#cbd5e1] font-medium">${t('noShiftToday')}</div>
+        <button onclick="openShiftModal(null,'${todayISO}')" class="text-xs text-[#9aa4b6] hover:text-[#d4f824] underline">${t('addShiftCta')}</button>
+      </div>` : `<div class="space-y-2">${todayShifts.map(s => {
+        const st=getShiftType(s.typeId);
+        return `<div onclick="openShiftModal('${s.id}')" class="p-3 rounded-xl bg-[#11151d] border border-[#232936] hover:border-[#354054] cursor-pointer flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${s.color||st.color}"></span>
+            <div class="truncate">
+              <div class="text-xs sm:text-sm font-semibold text-white truncate">${escapeHTML(st.label)} ${s.location?`· ${escapeHTML(s.location)}`:''}</div>
+              <div class="text-[11px] text-[#8892a4]">${s.start||'—'} – ${s.end||'—'}</div>
+            </div>
+          </div>
+          <span class="text-xs font-semibold text-[#d4f824] shrink-0">${formatHours(calcShiftDurationHours(s.start,s.end))}</span>
+        </div>`;
+      }).join('')}</div>`}
+      <div class="pt-2 border-t border-[#232936]/70 flex flex-wrap items-center justify-between gap-2 text-xs text-[#8892a4]">
+        <span>${nextShift?`${t('nextShiftLabel')}: <strong class="text-slate-200">${formatDateIT(nextShift.date)}</strong> (${nextShift.start||'—'})`:t('noOtherShift')}</span>
+        <span>${t('restDaysInMonth')}: <strong class="text-slate-200">${metrics.restDays}</strong></span>
+      </div>
+    </div>` : ''}
+
+    ${w.showReminders ? `<div class="saas-card p-4 sm:p-5 space-y-3.5">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm sm:text-base font-semibold text-white">${t('remindersTitle')}</h2>
+        <span class="px-2.5 py-1 rounded-full bg-[#1a202c] border border-[#252d3d] text-[11px] font-medium text-[#cbd5e1] inline-flex items-center gap-1.5">
+          <i data-lucide="bell" class="w-3 h-3 text-[#d4f824]"></i><span>${t('next24hBadge')}</span>
+        </span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-slate-200 inline-flex items-center gap-1.5"><i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-[#d4f824]"></i><span>${t('shiftReminders')}</span></span>
+            <button onclick="navigate('turni')" class="text-[#8892a4] hover:text-white">${t('openCalendar')}</button>
+          </div>
+          ${next24hShifts.length===0 ? `<div class="dashed-empty py-5 px-3 text-center text-xs text-[#8892a4]">${t('noShift24h')}</div>`
+            : `<div class="space-y-1.5">${next24hShifts.map(s=>`<div class="p-2.5 rounded-xl bg-[#11151d] border border-[#232936] text-xs flex items-center justify-between"><span class="font-medium text-white">${formatDateIT(s.date)} · ${getShiftType(s.typeId).label}</span><span class="text-[#d4f824] font-semibold">${s.start||''}</span></div>`).join('')}</div>`}
+        </div>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-slate-200 inline-flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-sky-400"></i><span>${t('renewalReminders')}</span></span>
+            <button onclick="navigate('abbonamenti')" class="text-[#8892a4] hover:text-white">${t('allLink')}</button>
+          </div>
+          ${next24hRenewals.length===0 ? `<div class="dashed-empty py-5 px-3 text-center text-xs text-[#8892a4]">${t('noRenewal24h')}</div>`
+            : `<div class="space-y-1.5">${next24hRenewals.map(sub=>`<div class="p-2.5 rounded-xl bg-[#11151d] border border-[#232936] text-xs flex items-center justify-between"><span class="font-medium text-white">${escapeHTML(sub.name)}</span><span class="text-amber-300 font-semibold">${formatCurrency(sub.amount)}</span></div>`).join('')}</div>`}
+        </div>
+      </div>
+    </div>` : ''}
+
+    ${w.showBalanceChart ? `<div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 saas-card p-4 sm:p-5 flex flex-col justify-between space-y-4">
+        <div class="space-y-3">
+          <h2 class="text-sm sm:text-base font-semibold text-white">${t('monthSummaryTitle')}</h2>
+          <div class="space-y-2 text-xs sm:text-sm">
+            ${[[t('incomeRow'),formatCurrency(metrics.income)],[t('expensesRow'),formatCurrency(metrics.expenses)]].map(([l,v])=>`<div class="flex items-center justify-between py-1"><span class="text-[#9aa4b6]">${l}</span><span class="font-semibold text-white">${v}</span></div>`).join('')}
+            <div class="flex items-center justify-between py-1 pb-2.5 border-b border-[#232936]"><span class="text-[#9aa4b6]">${t('subscriptionsRow')}</span><span class="font-semibold text-white">${formatCurrency(metrics.subscriptionsMonthly)}</span></div>
+            <div class="flex items-center justify-between pt-1"><span class="font-semibold text-white">${t('balanceRow')}</span><span class="font-bold ${metrics.balance>=0?'text-[#22c55e]':'text-rose-400'}">${formatCurrency(metrics.balance)}</span></div>
+          </div>
+          <div class="pt-1 space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] text-[#8892a4]"><span>${t('spentQuota')}</span><span>${metrics.spentPct}%</span></div>
+            <div class="w-full h-1.5 rounded-full bg-[#232936] overflow-hidden"><div class="h-full rounded-full bg-[#d4f824]" style="width:${metrics.spentPct}%"></div></div>
+          </div>
+        </div>
+        <button onclick="navigate('riepilogo')" class="text-xs text-[#9aa4b6] hover:text-white inline-flex items-center gap-1"><span>${t('fullSummaryLink')}</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></button>
+      </div>
+      <div class="lg:col-span-7 saas-card p-4 sm:p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm sm:text-base font-semibold text-white">${t('last6Months')}</h2>
+          <div class="flex items-center gap-3 text-[11px] text-[#9aa4b6]">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#d4f824]"></span><span>${t('incomeRow')}</span></span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400"></span><span>${t('expensesRow')}</span></span>
+          </div>
+        </div>
+        <div class="flex-1 flex flex-col justify-end pt-4">
+          <div class="grid grid-cols-6 gap-2 sm:gap-4 items-end h-36 px-1">
+            ${last6Months.map(m=>{
+              const ip=Math.round((m.income/max6)*100), op=Math.round((m.out/max6)*100);
+              return `<div class="flex flex-col items-center h-full justify-end gap-1.5">
+                <div class="w-full flex items-end justify-center gap-1 h-28">
+                  <div class="w-2.5 sm:w-3 rounded-t bg-[#d4f824]/90" style="height:${Math.max(4,ip)}%"></div>
+                  <div class="w-2.5 sm:w-3 rounded-t bg-sky-400/90" style="height:${Math.max(4,op)}%"></div>
+                </div>
+                <span class="text-[10px] font-medium text-[#8892a4] tracking-tight">${m.label}</span>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="w-full h-[1px] bg-[#232936] mt-1"></div>
+        </div>
+      </div>
+    </div>` : ''}
+
+    ${w.showBottomPanels ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+      <div class="saas-card p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs sm:text-sm font-semibold text-white">${t('upcomingActivities')}</h3>
+          <button onclick="openActivityModal()" class="text-xs text-[#9aa4b6] hover:text-white">${t('manageLink')}</button>
+        </div>
+        ${pendingActivities.length===0 ? `<div class="dashed-empty py-5 px-3 text-center text-xs text-[#8892a4]">${t('noPendingActivities')}</div>` : `
+        <div class="space-y-1.5 max-h-40 overflow-y-auto">${pendingActivities.slice(0,4).map(act=>`
+          <div class="p-2 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-2 text-xs">
+            <button onclick="toggleActivityDone('${act.id}')" class="flex items-center gap-2 text-left min-w-0">
+              <span class="w-3.5 h-3.5 rounded border border-[#475569] flex items-center justify-center shrink-0"></span>
+              <span class="truncate text-slate-200">${escapeHTML(act.title)}</span>
+            </button>
+            ${act.date?`<span class="text-[10px] text-[#8892a4] shrink-0">${formatDateIT(act.date)}</span>`:''}
+          </div>`).join('')}</div>`}
+      </div>
+      <div class="saas-card p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs sm:text-sm font-semibold text-white">${t('upcomingRenewals')}</h3>
+          <button onclick="navigate('abbonamenti')" class="text-xs text-[#9aa4b6] hover:text-white">${t('allLink')}</button>
+        </div>
+        ${upcomingSubs.length===0 ? `<div class="dashed-empty py-5 px-3 text-center text-xs text-[#8892a4]">${t('noUpcomingRenewals')}</div>` : `
+        <div class="space-y-1.5 max-h-40 overflow-y-auto">${upcomingSubs.slice(0,4).map(sub=>`
+          <div class="p-2 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-2 text-xs">
+            <div class="truncate"><div class="font-medium text-white truncate">${escapeHTML(sub.name)}</div><div class="text-[10px] text-[#8892a4]">${formatDateIT(sub.nextDate)}</div></div>
+            <span class="font-semibold text-white shrink-0">${formatCurrency(sub.amount)}</span>
+          </div>`).join('')}</div>`}
+      </div>
+      <div class="saas-card p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs sm:text-sm font-semibold text-white">${t('scheduledAbsences')}</h3>
+          <button onclick="navigate('assenze')" class="text-xs text-[#9aa4b6] hover:text-white">${t('allLink')}</button>
+        </div>
+        ${plannedAbsences.length===0 ? `<div class="dashed-empty py-5 px-3 text-center text-xs text-[#8892a4]">${t('noScheduledAbsences')}</div>` : `
+        <div class="space-y-1.5 max-h-40 overflow-y-auto">${plannedAbsences.slice(0,4).map(ab=>`
+          <div class="p-2 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-2 text-xs">
+            <div class="truncate"><div class="font-medium text-white truncate">${escapeHTML(ab.type)}</div><div class="text-[10px] text-[#8892a4]">${formatDateIT(ab.startDate)}${ab.endDate&&ab.endDate!==ab.startDate?' → '+formatDateIT(ab.endDate):''}</div></div>
+            <span class="text-[11px] font-semibold text-[#d4f824] shrink-0">${ab.category==='overtime'?formatHours(ab.hours):(ab.days||1)+'g'}</span>
+          </div>`).join('')}</div>`}
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+// ============================================================
+// ACTIVITIES
+// ============================================================
+function openActivityModal() {
+  openModal(`
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">Attività</h3>
+      <button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form onsubmit="saveActivityForm(event)" class="flex gap-2 mb-4">
+      <input name="title" type="text" required placeholder="Nuova attività..." class="flex-1 px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" />
+      <input name="date" type="date" class="px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" />
+      <button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">${t('addBtn')}</button>
+    </form>
+    <div class="space-y-2 max-h-64 overflow-y-auto" id="activity-list">
+      ${state.activities.length===0 ? `<div class="text-xs text-[#8892a4]">Nessuna attività.</div>` :
+        state.activities.map(act=>`<div class="flex items-center justify-between p-2.5 rounded-xl bg-[#11151d] border border-[#232936] text-xs gap-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" ${act.done?'checked':''} onchange="toggleActivityDone('${act.id}')" class="accent-[#d4f824]" />
+            <span class="${act.done?'line-through text-[#8892a4]':'text-white'}">${escapeHTML(act.title)}</span>
+          </label>
+          <div class="flex items-center gap-1.5 shrink-0">
+            ${act.date?`<span class="text-[#8892a4]">${formatDateIT(act.date)}</span>`:''}
+            <button onclick="deleteActivity('${act.id}')" class="text-rose-400 hover:text-rose-300">${t('deleteBtn')}</button>
+          </div>
+        </div>`).join('')}
+    </div>
+  `);
+}
+function saveActivityForm(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  state.activities.push({ id:'act_'+Date.now(), title:(fd.get('title')||'').trim(), date:fd.get('date')||'', done:false });
+  saveState(); openActivityModal();
+}
+function toggleActivityDone(id) {
+  const act = state.activities.find(a => a.id===id);
+  if (act) { act.done = !act.done; saveState(); }
+  if (document.getElementById('activity-list')) { openActivityModal(); } else { renderCurrentView(); }
+}
+function deleteActivity(id) {
+  state.activities = state.activities.filter(a => a.id!==id);
+  saveState(); openActivityModal();
+}
+
+// ============================================================
+// CALENDAR VIEW
+// ============================================================
+function getAbsencesForDate(isoDate) {
+  return state.absences.filter(ab => { if(!ab.startDate) return false; return isoDate>=ab.startDate && isoDate<=(ab.endDate||ab.startDate); });
+}
+function getAbsenceBadgeStyle(cat) {
+  if(cat==='sick') return 'bg-rose-500/20 text-rose-200 border border-rose-500/40';
+  if(cat==='permit') return 'bg-amber-500/20 text-amber-200 border border-amber-500/40';
+  if(cat==='overtime') return 'bg-[#d4f824]/20 text-[#d4f824] border border-[#d4f824]/40';
+  return 'bg-teal-500/20 text-teal-200 border border-teal-500/40';
+}
+
+function renderCalendarView() {
+  const year = calendarCursorDate.getFullYear(), month = calendarCursorDate.getMonth();
+  const monthTitle = calendarCursorDate.toLocaleDateString(state.lang==='en'?'en-US':'it-IT',{month:'long',year:'numeric'});
+  const dayHeaders = state.lang==='en'?['MON','TUE','WED','THU','FRI','SAT','SUN']:['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+  let gridHtml = '';
+
+  if (calendarViewMode==='month') {
+    const first = new Date(year,month,1), offset=(first.getDay()+6)%7, daysInMonth=new Date(year,month+1,0).getDate(), todayISO=toISODate(new Date());
+    const cells=[];
+    for(let i=0;i<offset;i++) cells.push(`<div class="min-h-[84px] sm:min-h-[104px] rounded-xl bg-[#10141c]/50 border border-[#1b202b]/60 p-1.5"></div>`);
+    for(let d=1;d<=daysInMonth;d++){
+      const iso=toISODate(new Date(year,month,d)), isToday=iso===todayISO;
+      const ds=state.shifts.filter(s=>s.date===iso), da=getAbsencesForDate(iso);
+      cells.push(`<div onclick="openShiftModal(null,'${iso}')" class="min-h-[84px] sm:min-h-[104px] rounded-xl bg-[#111620] hover:bg-[#161c28] border ${isToday?'border-[#d4f824]':'border-[#222938]'} p-1.5 sm:p-2 cursor-pointer flex flex-col justify-between transition-colors">
+        <div class="flex items-center justify-between"><span class="text-xs font-semibold ${isToday?'text-[#d4f824]':'text-slate-300'}">${d}</span>${(ds.length+da.length)>0?`<span class="text-[10px] text-[#8892a4]">${ds.length+da.length}</span>`:''}</div>
+        <div class="space-y-1 mt-1 overflow-hidden">
+          ${ds.slice(0,2).map(s=>{const st=getShiftType(s.typeId);return`<div onclick="event.stopPropagation();openShiftModal('${s.id}')" class="px-1.5 py-0.5 rounded text-[10px] font-semibold truncate text-[#0d0f14]" style="background:${s.color||st.color}">${s.start?s.start+' ':''}${escapeHTML(st.label)}</div>`}).join('')}
+          ${da.slice(0,2).map(ab=>`<div onclick="event.stopPropagation();navigate('assenze')" class="px-1.5 py-0.5 rounded text-[10px] font-semibold truncate ${getAbsenceBadgeStyle(ab.category)}">${escapeHTML(ab.type)}</div>`).join('')}
+          ${(ds.length+da.length)>4?`<div class="text-[10px] text-[#8892a4]">+${(ds.length+da.length)-4}</div>`:''}
+        </div>
+      </div>`);
+    }
+    gridHtml=`<div class="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2 text-center">${dayHeaders.map(h=>`<div class="text-[10px] sm:text-[11px] font-semibold tracking-wider text-[#8892a4] py-1">${h}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1.5 sm:gap-2">${cells.join('')}</div>`;
+  } else if (calendarViewMode==='week') {
+    const curr=new Date(calendarCursorDate), diff=(curr.getDay()+6)%7, mon=new Date(curr.getFullYear(),curr.getMonth(),curr.getDate()-diff), todayISO=toISODate(new Date());
+    gridHtml=`<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">${Array.from({length:7},(_,i)=>{
+      const d=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i), iso=toISODate(d), isToday=iso===todayISO;
+      const ds=state.shifts.filter(s=>s.date===iso), da=getAbsencesForDate(iso);
+      return `<div onclick="openShiftModal(null,'${iso}')" class="min-h-[160px] rounded-xl bg-[#111620] hover:bg-[#161c28] border ${isToday?'border-[#d4f824]':'border-[#222938]'} p-2.5 cursor-pointer space-y-2">
+        <div class="flex items-center justify-between border-b border-[#222938] pb-1.5"><span class="text-[10px] font-bold text-[#8892a4]">${dayHeaders[i]}</span><span class="text-xs font-bold ${isToday?'text-[#d4f824]':'text-white'}">${d.getDate()}/${d.getMonth()+1}</span></div>
+        <div class="space-y-1.5">
+          ${ds.map(s=>{const st=getShiftType(s.typeId);return`<div onclick="event.stopPropagation();openShiftModal('${s.id}')" class="p-1.5 rounded-lg text-[11px] font-semibold text-[#0d0f14]" style="background:${s.color||st.color}"><div>${escapeHTML(st.label)}</div><div class="text-[10px] opacity-85">${s.start||''} ${s.end?'– '+s.end:''}</div></div>`}).join('')}
+          ${da.map(ab=>`<div onclick="event.stopPropagation();navigate('assenze')" class="p-1.5 rounded-lg text-[11px] font-semibold ${getAbsenceBadgeStyle(ab.category)}"><div>${escapeHTML(ab.type)}</div></div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+  } else {
+    const iso=toISODate(calendarCursorDate), ds=state.shifts.filter(s=>s.date===iso), da=getAbsencesForDate(iso);
+    gridHtml=`<div class="space-y-3">
+      <div class="flex items-center justify-between"><div class="text-sm font-semibold text-white">${formatDateIT(iso)}</div><button onclick="openShiftModal(null,'${iso}')" class="lime-btn px-3 py-1.5 rounded-xl text-xs">${t('addShiftCta')}</button></div>
+      ${ds.length===0&&da.length===0?`<div class="dashed-empty py-10 text-center text-sm text-[#8892a4]">${t('noShiftDay')}</div>`:`<div class="space-y-2">
+        ${ds.map(s=>{const st=getShiftType(s.typeId);return`<div onclick="openShiftModal('${s.id}')" class="p-3.5 rounded-xl bg-[#111620] border border-[#232936] hover:border-[#374156] cursor-pointer flex items-center justify-between"><div class="flex items-center gap-3"><span class="w-3 h-3 rounded-full" style="background:${s.color||st.color}"></span><div><div class="text-sm font-bold text-white">${escapeHTML(st.label)}</div><div class="text-xs text-[#8892a4]">${s.start||'—'} – ${s.end||'—'}</div></div></div><span class="text-xs font-semibold text-[#d4f824]">${formatHours(calcShiftDurationHours(s.start,s.end))}</span></div>`}).join('')}
+        ${da.map(ab=>`<div onclick="navigate('assenze')" class="p-3.5 rounded-xl bg-[#111620] border border-[#232936] hover:border-[#374156] cursor-pointer"><span class="px-2 py-0.5 rounded text-xs font-semibold ${getAbsenceBadgeStyle(ab.category)}">${escapeHTML(ab.type)}</span></div>`).join('')}
+      </div>`}
+    </div>`;
+  }
+
+  return `<div class="space-y-4">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('calEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('calTitle')}</h1></div>
+      <div class="flex items-center gap-2">
+        <button onclick="navigate('importa')" class="px-3.5 py-2.5 rounded-xl bg-[#151921] hover:bg-[#1c222d] border border-[#232936] text-xs sm:text-sm font-semibold text-white inline-flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-[#d4f824]"></i><span>${t('importBtn')}</span></button>
+        <button onclick="openShiftModal(null,'${toISODate(calendarCursorDate)}')" class="lime-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm inline-flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i><span>${t('newShiftBtn')}</span></button>
+      </div>
+    </div>
+    <div class="saas-card p-4 sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2">
+          <button onclick="moveCalendar(-1)" class="w-9 h-9 rounded-full bg-[#1a202c] hover:bg-[#232b3b] border border-[#232936] flex items-center justify-center text-slate-200"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+          <div class="text-base sm:text-lg font-bold text-white capitalize min-w-[140px] text-center">${escapeHTML(monthTitle)}</div>
+          <button onclick="moveCalendar(1)" class="w-9 h-9 rounded-full bg-[#1a202c] hover:bg-[#232b3b] border border-[#232936] flex items-center justify-center text-slate-200"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          <button onclick="calendarCursorDate=new Date();renderCurrentView();" class="px-3 py-1.5 rounded-full bg-[#1a202c] hover:bg-[#232b3b] border border-[#232936] text-xs font-semibold text-slate-200">${t('todayBtn')}</button>
+        </div>
+        <div class="inline-flex rounded-full bg-[#0d0f14] p-1 border border-[#232936]">
+          ${['month','week','day'].map((v,i)=>`<button onclick="calendarViewMode='${v}';renderCurrentView();" class="px-3.5 py-1 rounded-full text-xs font-semibold ${calendarViewMode===v?'bg-[#d4f824] text-[#0d0f14]':'text-[#8892a4] hover:text-white'}">${[t('viewMonth'),t('viewWeek'),t('viewDay')][i]}</button>`).join('')}
+        </div>
+      </div>
+      ${gridHtml}
+    </div>
+  </div>`;
+}
+
+function moveCalendar(delta) {
+  const d = new Date(calendarCursorDate);
+  if(calendarViewMode==='month') d.setMonth(d.getMonth()+delta);
+  else if(calendarViewMode==='week') d.setDate(d.getDate()+delta*7);
+  else d.setDate(d.getDate()+delta);
+  calendarCursorDate=d; renderCurrentView();
+}
+
+function openShiftModal(shiftId=null, defaultDate=toISODate(new Date())) {
+  const existing = shiftId ? state.shifts.find(s=>s.id===shiftId) : null;
+  const sh = existing || { id:'', date:defaultDate, typeId:'morning', start:'08:00', end:'14:00', location:state.profile.department||'', notes:'', color:'' };
+  openModal(`
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-white">${existing?'Modifica turno':'Nuovo turno'}</h3>
+      <button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <form onsubmit="saveShiftForm(event,'${existing?existing.id:''}')" class="space-y-3.5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Data</label><input name="date" type="date" required value="${sh.date}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+        <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Tipologia</label>
+          <select name="typeId" onchange="onShiftTypeChange(this.value)" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white">
+            ${state.shiftTypes.map(st=>`<option value="${st.id}" ${sh.typeId===st.id?'selected':''}>${escapeHTML(st.label)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Ora inizio</label><input id="shift-start-input" name="start" type="time" value="${sh.start||''}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+        <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Ora fine</label><input id="shift-end-input" name="end" type="time" value="${sh.end||''}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Luogo / Reparto</label><input name="location" type="text" value="${escapeHTML(sh.location||'')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+        <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Colore</label><input name="color" type="color" value="${sh.color||getShiftType(sh.typeId).color}" class="w-full h-[38px] px-1.5 py-1 rounded-xl bg-[#0d0f14] border border-[#232936] cursor-pointer" /></div>
+      </div>
+      <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Note</label><input name="notes" type="text" value="${escapeHTML(sh.notes||'')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+      ${!existing?`<div class="p-3 rounded-xl bg-[#11151d] border border-[#232936] space-y-2">
+        <label class="flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer">
+          <input id="shift-recurring-check" name="recurring" type="checkbox" onchange="document.getElementById('recurring-opts').classList.toggle('hidden',!this.checked)" class="rounded accent-[#d4f824]" />
+          <span>Ripeti turno ricorrente</span>
+        </label>
+        <div id="recurring-opts" class="hidden grid grid-cols-2 gap-2 pt-1">
+          <div><label class="block text-[11px] text-[#8892a4] mb-1">Ogni (giorni)</label><input name="repeatEveryDays" type="number" min="1" max="60" value="7" class="w-full px-2.5 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" /></div>
+          <div><label class="block text-[11px] text-[#8892a4] mb-1">Numero ripetizioni</label><input name="repeatCount" type="number" min="1" max="31" value="4" class="w-full px-2.5 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" /></div>
+        </div>
+      </div>`:''}
+      <div class="flex items-center justify-between pt-2 gap-2">
+        ${existing?`<div class="flex items-center gap-2"><button type="button" onclick="deleteShift('${existing.id}')" class="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold">Elimina</button><button type="button" onclick="duplicateShiftNextDay('${existing.id}')" class="px-3 py-2 rounded-xl bg-[#1c222e] hover:bg-[#252d3d] text-slate-200 text-xs font-semibold">Copia +1g</button></div>`:'<div></div>'}
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button>
+          <button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button>
+        </div>
+      </div>
+    </form>`);
+}
+function onShiftTypeChange(typeId) {
+  const st=getShiftType(typeId); if(!st) return;
+  const si=document.getElementById('shift-start-input'), ei=document.getElementById('shift-end-input');
+  if(si&&st.defaultStart!==undefined) si.value=st.defaultStart;
+  if(ei&&st.defaultEnd!==undefined) ei.value=st.defaultEnd;
+}
+function saveShiftForm(e, existingId) {
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const base={ id:existingId||('sh_'+Date.now()+'_'+Math.random().toString(36).slice(2,6)), date:fd.get('date'), typeId:fd.get('typeId'), start:fd.get('start')||'', end:fd.get('end')||'', location:(fd.get('location')||'').trim(), notes:(fd.get('notes')||'').trim(), color:fd.get('color')||'' };
+  if(existingId) { state.shifts=state.shifts.map(s=>s.id===existingId?base:s); }
+  else {
+    state.shifts.push(base);
+    if(fd.get('recurring')==='on') {
+      const every=Math.max(1,Number(fd.get('repeatEveryDays'))||7), count=Math.min(31,Math.max(1,Number(fd.get('repeatCount'))||4));
+      const startObj=new Date(`${base.date}T12:00:00`);
+      for(let i=1;i<=count;i++){
+        const nd=new Date(startObj.getFullYear(),startObj.getMonth(),startObj.getDate()+i*every);
+        state.shifts.push({...base,id:'sh_'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,5),date:toISODate(nd)});
+      }
+    }
+  }
+  saveState(); closeModal(); renderCurrentView(); showToast('Turno salvato.');
+}
+function deleteShift(id) { state.shifts=state.shifts.filter(s=>s.id!==id); saveState(); closeModal(); renderCurrentView(); showToast('Turno eliminato.'); }
+function duplicateShiftNextDay(id) {
+  const orig=state.shifts.find(s=>s.id===id); if(!orig) return;
+  const dt=new Date(`${orig.date}T12:00:00`); dt.setDate(dt.getDate()+1);
+  state.shifts.push({...orig,id:'sh_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),date:toISODate(dt)});
+  saveState(); closeModal(); renderCurrentView(); showToast('Turno copiato al giorno successivo.');
+}
+
+// ============================================================
+// IMPORT VIEW
+// ============================================================
+function renderImportView() {
+  const defaultName = state.profile.name || currentUserId;
+  return `<div class="space-y-5">
+    <div>
+      <div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('importEyebrow')}</div>
+      <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('importTitle')}</h1>
+      <p class="text-sm text-[#9aa4b6] mt-1">${t('importSubtitle')}</p>
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div class="flex-1">
+          <label class="block text-[11px] font-bold tracking-wider text-[#cbd5e1] uppercase mb-2">${t('targetNameLabel')}</label>
+          <input id="import-target-name" type="text" value="${escapeHTML(defaultName)}" class="w-full px-3.5 py-2.5 rounded-xl bg-[#0d0f14] border border-[#2a3344] text-sm text-white" />
+        </div>
+        <button type="button" onclick="openAiConfigModal()" class="px-3.5 py-2.5 rounded-xl bg-[#1a202c] hover:bg-[#242c3d] border border-[#2d3748] text-xs font-semibold text-white inline-flex items-center gap-2 shrink-0">
+          <i data-lucide="sparkles" class="w-4 h-4 text-[#d4f824]"></i>
+          <span>${state.aiConfig?.apiKey?'IA Attiva ('+escapeHTML(state.aiConfig.provider.toUpperCase())+')':'Configura IA'}</span>
+        </button>
+      </div>
+      <p class="text-xs text-[#8892a4] -mt-2">${t('targetNameHint')}</p>
+      <div id="drop-zone" ondragover="event.preventDefault();this.classList.add('border-[#d4f824]')" ondragleave="this.classList.remove('border-[#d4f824]')" ondrop="handleFileDrop(event)" class="rounded-2xl border border-dashed border-[#2d3748] bg-[#11151d] p-6 sm:p-8 text-center transition-colors">
+        <div class="w-10 h-10 rounded-xl bg-[#1b2230] text-[#d4f824] flex items-center justify-center mx-auto mb-3"><i data-lucide="upload-cloud" class="w-5 h-5"></i></div>
+        <div class="text-sm font-semibold text-white">${t('dropTitle')}</div>
+        <div class="text-xs text-[#8892a4] mt-1 mb-4">${t('dropSub')}</div>
+        <div class="flex flex-wrap items-center justify-center gap-2.5">
+          <label class="lime-btn px-4 py-2 rounded-xl text-xs sm:text-sm cursor-pointer inline-flex items-center gap-2">
+            <i data-lucide="file-up" class="w-4 h-4"></i><span>${t('importFileBtn')}</span>
+            <input id="import-file-input" type="file" accept=".pdf,image/*" onchange="handleFileInputChange(event)" class="hidden" />
+          </label>
+          <label class="px-4 py-2 rounded-xl bg-[#1a202c] hover:bg-[#232c3d] border border-[#2d3748] text-xs sm:text-sm font-semibold text-white cursor-pointer inline-flex items-center gap-2">
+            <i data-lucide="camera" class="w-4 h-4 text-[#d4f824]"></i><span>${t('takePhotoBtn')}</span>
+            <input id="import-camera-input" type="file" accept="image/*" capture="environment" onchange="handleFileInputChange(event)" class="hidden" />
+          </label>
+        </div>
+      </div>
+      <div class="text-xs text-[#8892a4]">${t('dupNotice')}</div>
+      <div class="pt-3 border-t border-[#232936]">
+        <label class="block text-xs font-semibold text-[#9aa4b6] mb-1.5">${t('pasteTextLabel')}</label>
+        <textarea id="import-raw-text" rows="3" placeholder="Es: 25/11/2026 Mattina 08:00-14:00 Capasso" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-xs text-white"></textarea>
+        <div class="flex items-center justify-end mt-2">
+          <button onclick="parseManualTextInput()" class="px-3.5 py-1.5 rounded-xl bg-[#1a202c] hover:bg-[#242c3d] border border-[#2d3748] text-xs font-semibold text-[#d4f824]">${t('analyzeTextBtn')}</button>
+        </div>
+      </div>
+    </div>
+    <div id="import-status-box" class="hidden saas-card p-4 text-xs text-slate-200"></div>
+    <div id="import-debug-box" class="hidden saas-card p-4 space-y-2 text-xs">
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-slate-200">Testo estratto (diagnostica)</span>
+        <button type="button" onclick="document.getElementById('import-debug-pre').classList.toggle('hidden')" class="text-[#d4f824] underline text-[11px]">Mostra/Nascondi</button>
+      </div>
+      <pre id="import-debug-pre" class="hidden p-3 rounded-xl bg-[#0d0f14] border border-[#232936] text-[11px] text-slate-300 whitespace-pre-wrap max-h-56 overflow-y-auto"></pre>
+    </div>
+    <div id="import-preview-section" class="${pendingExtractedRows.length>0?'':'hidden'} saas-card p-4 sm:p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div><h2 class="text-base font-bold text-white">${t('previewTitle')}</h2><p class="text-xs text-[#8892a4]">${t('previewSub')}</p></div>
+        <button onclick="confirmImportedRows()" class="lime-btn px-4 py-2 rounded-xl text-xs sm:text-sm">${t('confirmImportBtn')}</button>
+      </div>
+      <div id="import-preview-list" class="space-y-2"></div>
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-3">
+      <h3 class="text-sm font-bold text-white">${t('docArchiveTitle')} (${state.importedDocs.length})</h3>
+      ${state.importedDocs.length===0?`<div class="dashed-empty py-5 text-center text-xs text-[#8892a4]">${t('noDocArchive')}</div>`:`<div class="space-y-2">${state.importedDocs.map(doc=>`
+        <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-3 text-xs">
+          <div><div class="font-semibold text-white">${escapeHTML(doc.name)}</div><div class="text-[#8892a4]">${formatDateIT(doc.date)} · ${doc.importedCount||0} ${t('movementsLabel')}</div></div>
+          <button onclick="inspectSavedDoc('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-[#1a202c] hover:bg-[#242c3d] text-slate-200 font-medium">${t('consultBtn')}</button>
+        </div>`).join('')}</div>`}
+    </div>
+  </div>`;
+}
+
+function setImportStatus(msg) {
+  const box=document.getElementById('import-status-box'); if(!box) return;
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="flex items-center gap-2.5"><span class="w-2.5 h-2.5 rounded-full bg-[#d4f824] animate-pulse"></span><span>${escapeHTML(msg)}</span></div>`;
+}
+function showExtractedDebugText(text) {
+  const box=document.getElementById('import-debug-box'), pre=document.getElementById('import-debug-pre');
+  if(!box||!pre) return;
+  if(text?.trim()) { box.classList.remove('hidden'); pre.textContent=text.trim(); } else { box.classList.add('hidden'); }
+}
+function handleFileDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('border-[#d4f824]'); const f=e.dataTransfer?.files?.[0]; if(f) processUploadedFile(f); }
+function handleFileInputChange(e) { const f=e.target?.files?.[0]; if(f) processUploadedFile(f); e.target.value=''; }
+function readFileAsDataURL(file) { return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result||'')); r.onerror=()=>rej(new Error('Errore lettura file')); r.readAsDataURL(file); }); }
+
+async function processUploadedFile(file) {
+  const targetName=(document.getElementById('import-target-name')?.value||'').trim();
+  setImportStatus(`Analisi di "${file.name}" in corso...`);
+  try {
+    let extractedText='', collectedLines=[], imageBase64='', imageMimeType='';
+    const isPdf=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
+    if(isPdf) {
+      if(!window.pdfjsLib) throw new Error('PDF.js non disponibile.');
+      const ab=await file.arrayBuffer(), pdf=await pdfjsLib.getDocument({data:ab}).promise, pages=[];
+      for(let p=1;p<=pdf.numPages;p++) {
+        const page=await pdf.getPage(p), content=await page.getTextContent();
+        const rawItems=content.items.map(it=>({str:String(it.str||'').trim(),x:Math.round(it.transform[4]),y:Math.round(it.transform[5]),w:Math.round(it.width||0)})).filter(it=>it.str.length>0);
+        rawItems.sort((a,b)=>Math.abs(b.y-a.y)>4?b.y-a.y:a.x-b.x);
+        const linesMap=[];
+        rawItems.forEach(item=>{ const found=linesMap.find(l=>Math.abs(l.y-item.y)<=5); if(found) found.items.push(item); else linesMap.push({y:item.y,items:[item]}); });
+        linesMap.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
+        let pageLines=linesMap.map(l=>{
+          const mergedCells=[];
+          l.items.forEach(cell=>{
+            const prev=mergedCells[mergedCells.length-1];
+            if(prev&&(cell.x-(prev.x+prev.w))<=10){prev.str=`${prev.str} ${cell.str}`.trim();prev.w=(cell.x+cell.w)-prev.x;}
+            else{mergedCells.push({...cell});}
+          });
+          return{page:p,y:l.y-(p-1)*2000,rawY:l.y,text:mergedCells.map(c=>c.str).join(' | '),cells:mergedCells};
+        });
+        let pageText=pageLines.map(l=>l.text).join('\n');
+        if(p===1&&state.aiConfig?.apiKey&&state.aiConfig.provider==='gemini') {
+          const vp=page.getViewport({scale:1.6}), cv=document.createElement('canvas');
+          cv.width=vp.width; cv.height=vp.height;
+          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          imageBase64=cv.toDataURL('image/jpeg',0.85).split(',')[1]; imageMimeType='image/jpeg';
+        }
+        if(pageText.replace(/\s+/g,'').length<25&&window.Tesseract&&!imageBase64) {
+          setImportStatus(`OCR pagina ${p}/${pdf.numPages}...`);
+          const vp=page.getViewport({scale:2.0}), cv=document.createElement('canvas');
+          cv.width=vp.width; cv.height=vp.height;
+          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          const ocrRes=await Tesseract.recognize(cv,'ita');
+          pageText=(ocrRes?.data?.text)||'';
+          pageLines=pageText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map((txt,idx)=>({page:p,y:-(p-1)*2000-idx*10,rawY:-idx*10,text:txt,cells:[]}));
+        }
+        collectedLines.push(...pageLines); pages.push(pageText);
+      }
+      extractedText=pages.join('\n');
+    } else {
+      if(state.aiConfig?.apiKey&&state.aiConfig.provider==='gemini') {
+        const du=await readFileAsDataURL(file); imageBase64=du.split(',')[1]; imageMimeType=file.type||'image/jpeg';
+      }
+      if(!imageBase64&&window.Tesseract) {
+        setImportStatus('OCR immagine in corso...');
+        const result=await Tesseract.recognize(file,'ita');
+        extractedText=(result?.data?.text)||'';
+        collectedLines=extractedText.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map((txt,i)=>({page:1,y:-i*10,rawY:-i*10,text:txt,cells:[]}));
+      }
+    }
+    let rows=[];
+    if(state.aiConfig?.apiKey||state.aiConfig?.provider==='ollama') {
+      setImportStatus(`Analisi IA (${state.aiConfig.provider.toUpperCase()}) in corso...`);
+      rows=await analyzeWithExternalAI({extractedText,imageBase64,imageMimeType,targetName});
+    } else {
+      setImportStatus(`IA locale: analisi spaziale...`);
+      rows=await smartLocalNeuralTurnParser(collectedLines,extractedText,targetName);
+    }
+    pendingExtractedRows=rows;
+    showExtractedDebugText(extractedText||(imageBase64?'[Immagine inviata alla visione IA]':''));
+    state.importedDocs.unshift({id:'doc_'+Date.now(),name:file.name,date:toISODate(new Date()),importedCount:rows.length,extractedText:(extractedText||'[IA visione]').slice(0,8000)});
+    saveState();
+    setImportStatus(`Analisi completata: ${rows.length} voci individuate.`);
+    renderImportPreviewList(); if(window.lucide) lucide.createIcons();
+  } catch(err) { console.error(err); setImportStatus(`Errore: ${err.message||'sconosciuto'}.`); }
+}
+
+async function parseManualTextInput() {
+  const raw=(document.getElementById('import-raw-text')?.value||'').trim();
+  const targetName=(document.getElementById('import-target-name')?.value||'').trim();
+  if(!raw) { showToast('Inserisci del testo da analizzare.'); return; }
+  try {
+    if(state.aiConfig?.apiKey||state.aiConfig?.provider==='ollama') {
+      setImportStatus(`IA (${state.aiConfig.provider}) in corso...`);
+      pendingExtractedRows=await analyzeWithExternalAI({extractedText:raw,imageBase64:'',imageMimeType:'',targetName});
+    } else {
+      setImportStatus('IA locale in corso...');
+      const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map((txt,i)=>({page:1,y:-i*10,rawY:-i*10,text:txt,cells:[]}));
+      pendingExtractedRows=await smartLocalNeuralTurnParser(lines,raw,targetName);
+    }
+    showExtractedDebugText(raw);
+    setImportStatus(`Analisi completata: ${pendingExtractedRows.length} voci.`);
+    renderImportPreviewList(); if(window.lucide) lucide.createIcons();
+  } catch(err) { setImportStatus(`Errore: ${err.message}`); }
+}
+
+async function analyzeWithExternalAI({extractedText,imageBase64,imageMimeType,targetName}) {
+  const cfg=state.aiConfig||{}; const yr=new Date().getFullYear(), mo=String(new Date().getMonth()+1).padStart(2,'0');
+  const prompt=`Sei un assistente specializzato nell'estrazione di prospetti turni lavorativi italiani.\nAnalizza il documento.\n${targetName?`FILTRO: Estrai SOLO i turni di "${targetName}".`:''}\nAnno default: ${yr}, mese default: ${mo}.\nRestituisci SOLO un array JSON valido (senza markdown), ogni elemento:\n{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","kind":"shift|absence","typeId":"morning|afternoon|night|rest|overtime|other","absenceCategory":"ferie|permesso|malattia","note":"..."}\n\nTesto:\n${extractedText||'(nessun testo, leggi dall\'immagine)'}`;
+  let raw='';
+  if(cfg.provider==='gemini') {
+    const model=cfg.model||'gemini-2.5-flash';
+    const parts=[{text:prompt}];
+    if(imageBase64) parts.push({inline_data:{mime_type:imageMimeType||'image/jpeg',data:imageBase64}});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1,responseMimeType:'application/json'}})});
+    if(!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0,180)}`);
+    const d=await res.json(); raw=d?.candidates?.[0]?.content?.parts?.[0]?.text||'[]';
+  } else if(cfg.provider==='openai') {
+    const res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${cfg.apiKey}`},body:JSON.stringify({model:cfg.model||'gpt-4o-mini',temperature:0.1,messages:[{role:'user',content:prompt}]})});
+    if(!res.ok) throw new Error(`OpenAI ${res.status}`);
+    const d=await res.json(); raw=d?.choices?.[0]?.message?.content||'[]';
+  } else if(cfg.provider==='ollama') {
+    const ep=(cfg.customEndpoint||'http://localhost:11434/api/generate').trim();
+    const res=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:cfg.model||'llama3.2',prompt,stream:false,format:'json'})});
+    if(!res.ok) throw new Error(`Ollama ${res.status}`);
+    const d=await res.json(); raw=d?.response||'[]';
+  }
+  const list=JSON.parse(raw.replace(/```json|```/gi,'').trim());
+  const arr=Array.isArray(list)?list:(Array.isArray(list?.shifts)?list.shifts:[]);
+  const rows=[]; const validTypes=['morning','afternoon','night','rest','overtime','other'];
+  arr.forEach((item,idx)=>{
+    if(!item?.date||!/^\d{4}-\d{2}-\d{2}$/.test(item.date)) return;
+    const start=/^\d{2}:\d{2}$/.test(item.start)?item.start:'', end=/^\d{2}:\d{2}$/.test(item.end)?item.end:'';
+    const kind=item.kind==='absence'?'absence':'shift';
+    const typeId=validTypes.includes(item.typeId)?item.typeId:'other';
+    const absenceCategory=['ferie','permesso','malattia'].includes(item.absenceCategory)?item.absenceCategory:'ferie';
+    const dup=state.shifts.some(s=>s.date===item.date&&(s.start||'')===start&&(s.end||'')===end);
+    rows.push({tempId:'ai_'+idx+'_'+Math.random().toString(36).slice(2,6),kind,date:item.date,start,end,typeId,absenceCategory,note:String(item.note||'').slice(0,160),duplicate:dup,selected:!dup});
+  });
+  return rows;
+}
+
+function openAiConfigModal() {
+  const cfg=state.aiConfig||{provider:'gemini',apiKey:'',model:'gemini-2.5-flash',customEndpoint:''};
+  openModal(`<div class="flex items-center justify-between mb-3"><h3 class="text-lg font-bold text-white">Motore IA per lettura turni</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+  <form onsubmit="saveAiConfigForm(event)" class="space-y-3.5">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Provider</label>
+      <select id="ai-provider-select" name="provider" onchange="onAiProviderChange(this.value)" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white">
+        <option value="gemini" ${cfg.provider==='gemini'?'selected':''}>Google Gemini</option>
+        <option value="openai" ${cfg.provider==='openai'?'selected':''}>OpenAI GPT</option>
+        <option value="ollama" ${cfg.provider==='ollama'?'selected':''}>Ollama Locale</option>
+      </select>
+    </div>
+    <div id="ai-apikey-box" class="${cfg.provider==='ollama'?'hidden':''}"><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">API Key</label><input name="apiKey" type="password" value="${escapeHTML(cfg.apiKey||'')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Modello</label><input id="ai-model-input" name="model" type="text" value="${escapeHTML(cfg.model||'gemini-2.5-flash')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div id="ai-endpoint-box" class="${cfg.provider==='ollama'?'':'hidden'}"><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Endpoint Ollama</label><input name="customEndpoint" type="text" value="${escapeHTML(cfg.customEndpoint||'http://localhost:11434/api/generate')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
+  </form>`);
+}
+function onAiProviderChange(val) {
+  document.getElementById('ai-apikey-box')?.classList.toggle('hidden',val==='ollama');
+  document.getElementById('ai-endpoint-box')?.classList.toggle('hidden',val!=='ollama');
+  const mi=document.getElementById('ai-model-input'); if(mi) mi.value=val==='gemini'?'gemini-2.5-flash':val==='openai'?'gpt-4o-mini':'llama3.2';
+}
+function saveAiConfigForm(e) {
+  e.preventDefault(); const fd=new FormData(e.target);
+  state.aiConfig={provider:fd.get('provider')||'gemini',apiKey:(fd.get('apiKey')||'').trim(),model:(fd.get('model')||'gemini-2.5-flash').trim(),customEndpoint:(fd.get('customEndpoint')||'').trim()};
+  saveState(); closeModal(); renderCurrentView(); showToast('Configurazione IA salvata.');
+}
+
+// Local AI helpers
+function normalizeForMatch(str) { return String(str||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+function lineMatchesTargetName(line,targetName) {
+  const ct=normalizeForMatch(targetName); if(!ct) return true;
+  const cl=normalizeForMatch(line); if(!cl) return false;
+  const toks=ct.split(' ').filter(t=>t.length>=2); if(!toks.length) return false;
+  return toks.every(tok=>new RegExp(`(^|\\s)${escapeRegex(tok)}(\\s|$)`,'i').test(cl)||(tok.length>=4&&cl.includes(tok)));
+}
+function inferYearMonthFromContext(txt) {
+  const now=new Date(); let year=now.getFullYear(), month=now.getMonth()+1;
+  const ym=txt.match(/\b(20\d{2})\b/); if(ym) year=Number(ym[1]);
+  const mn={gennaio:1,febbraio:2,marzo:3,aprile:4,maggio:5,giugno:6,luglio:7,agosto:8,settembre:9,ottobre:10,novembre:11,dicembre:12,gen:1,feb:2,mar:3,apr:4,mag:5,giu:6,lug:7,ago:8,set:9,ott:10,nov:11,dic:12};
+  const low=normalizeForMatch(txt);
+  for(const[n,v] of Object.entries(mn)) { if(new RegExp(`(^|\\s)${n}(\\s|$)`,'i').test(low)){month=v;break;} }
+  return {year,month};
+}
+function parseTimeRangeFromText(seg) {
+  const r=seg.match(/\b(\d{1,2}[:.]\d{2})\s*(?:[-–—\/→]|alle?|a|fino\s+alle?)\s*(\d{1,2}[:.]\d{2})\b/i);
+  if(r) { const n=s=>{ const c=s.replace('.',':'); const[h,m]=c.split(':'); return`${String(Number(h)).padStart(2,'0')}:${m}`; }; return{start:n(r[1]),end:n(r[2])}; }
+  if(/\b(mattin\w*|matt\.?)\b/i.test(seg)&&!/\d{1,2}[:.]\d{2}/.test(seg)) return{start:'08:00',end:'14:00'};
+  if(/\b(pomerig\w*|pom\.?)\b/i.test(seg)&&!/\d{1,2}[:.]\d{2}/.test(seg)) return{start:'14:00',end:'20:00'};
+  if(/\b(nott\w*)\b/i.test(seg)&&!/\d{1,2}[:.]\d{2}/.test(seg)) return{start:'22:00',end:'06:00'};
+  return{start:'',end:''};
+}
+function classifySegmentDetails(seg) {
+  const{start,end}=parseTimeRangeFromText(seg); const low=seg.toLowerCase();
+  let kind='shift',typeId='other',absenceCategory='ferie';
+  if(/\b(ripos\w*|recuper\w*|permess\w*|rol)\b/i.test(low)){kind='absence';absenceCategory='permesso';}
+  else if(/\b(malatt\w*|infortun\w*)\b/i.test(low)){kind='absence';absenceCategory='malattia';}
+  else if(/\b(ferie|licenz\w*|conged\w*)\b/i.test(low)){kind='absence';absenceCategory='ferie';}
+  else if(/\b(ripos\w*|libero|off)\b/i.test(low)) typeId='rest';
+  else if(/\b(straordin\w*)\b/i.test(low)) typeId='overtime';
+  else if(/\b(mattin\w*|matt\.?)\b/i.test(low)) typeId='morning';
+  else if(/\b(pomerig\w*|pom\.?)\b/i.test(low)) typeId='afternoon';
+  else if(/\b(nott\w*)\b/i.test(low)) typeId='night';
+  if(kind==='shift'&&typeId==='other'&&start){const h=Number(start.split(':')[0]);typeId=h>=5&&h<12?'morning':h>=12&&h<19?'afternoon':'night';}
+  return{start,end,kind,typeId,absenceCategory};
+}
+function resolveDateFromTokens(dayStr,monthStr,yearStr,ctxYear,ctxMonth) {
+  const d=Number(dayStr); if(!d||d<1||d>31) return '';
+  const m=monthStr?Number(monthStr):ctxMonth; if(!m||m<1||m>12) return '';
+  let y=yearStr?Number(yearStr):ctxYear; if(y<100) y+=2000;
+  const dt=new Date(y,m-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d) return '';
+  return toISODate(dt);
+}
+
+async function smartLocalNeuralTurnParser(structuredLines,rawText,targetName='') {
+  const spatial=localAITurnParser(structuredLines,rawText,targetName);
+  if(spatial.length>0) return spatial;
+  if(!window.RitmoLocalAI||!rawText||rawText.trim().length<8) return [];
+  try {
+    setImportStatus('Caricamento modello neurale IA locale...');
+    const extractor=await window.RitmoLocalAI.getExtractor();
+    const{year:cy,month:cm}=inferYearMonthFromContext(rawText);
+    const lines=rawText.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    const ct=normalizeForMatch(targetName);
+    let snippet='';
+    if(ct) { const p=[]; for(let i=0;i<lines.length;i++){if(lineMatchesTargetName(lines[i],ct)){p.push(lines.slice(Math.max(0,i-1),Math.min(lines.length,i+8)).join(' ; '));}} snippet=p.join('\n').slice(0,1400); }
+    else { snippet=lines.join('\n').slice(0,1400); }
+    if(!snippet) return [];
+    setImportStatus('Analisi semantica neurale in corso...');
+    const out=await extractor(`Extract work shifts${targetName?' ONLY for '+targetName:''} from this schedule (month ${cm}/${cy}). Format per shift: YYYY-MM-DD | HH:MM-HH:MM | TYPE. Text:\n${snippet}`,{max_new_tokens:220,temperature:0.1});
+    const gen=(out?.[0]?.generated_text)||'';
+    if(!gen) return [];
+    const synthLines=gen.split(/\r?\n|;/).map(s=>s.trim()).filter(Boolean).map((txt,i)=>({page:1,y:-i*10,rawY:-i*10,text:txt,cells:[]}));
+    return localAITurnParser(synthLines,gen,'');
+  } catch(err) { console.warn('Neural fallback unavailable:',err); return []; }
+}
+
+function looksLikeAnotherPersonOrHeader(line,targetName) {
+  const ct=normalizeForMatch(targetName); if(!ct) return false;
+  if(lineMatchesTargetName(line,ct)) return false;
+  const cleaned=line.trim(); if(!cleaned) return false;
+  if(/^(dipendente|operatore|nominativo|addetto|risorsa|cognome|nome|matricola|sig\.?|dott\.?)\b/i.test(cleaned)) return true;
+  if(/\b[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,},\s*[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,}\b/.test(cleaned)||
+     /\b[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,}\s+[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]{2,}\b/.test(cleaned)||
+     /\b[A-ZÀ-ÖØ-Þ]{3,}\s+[A-ZÀ-ÖØ-Þ]{3,}\b/.test(cleaned)) return true;
+  return false;
+}
+
+function localAITurnParser(structuredLines,rawText,targetName='') {
+  const rows=[], ct=normalizeForMatch(targetName);
+  const{year:ctxYear,month:ctxMonth}=inferYearMonthFromContext(rawText);
+  const isShiftMeaningful=s=>{if(!s)return false;const{start}=parseTimeRangeFromText(s);if(start)return true;return/\b(mattin\w*|matt\.?|pomerig\w*|pom\.?|nott\w*|ripos\w*|libero|off|r\.?o\.?|rip\.?|ferie|licenz\w*|conged\w*|permess\w*|rol|recuper\w*|malatt\w*|straordin\w*|str\.?|[mpn]\d{0,2})\b/i.test(s);};
+  const addRow=(isoDate,segText)=>{
+    if(!isoDate||!isShiftMeaningful(segText)) return;
+    const{start,end,kind,typeId,absenceCategory}=classifySegmentDetails(segText);
+    const dup=state.shifts.some(s=>s.date===isoDate&&(s.start||'')===start&&(s.end||'')===end)||rows.some(r=>r.kind===kind&&r.date===isoDate&&(r.start||'')===start&&(r.end||'')===end);
+    rows.push({tempId:'row_'+rows.length+'_'+Math.random().toString(36).slice(2,6),kind,date:isoDate,start,end,typeId,absenceCategory,note:segText.replace(/\s+/g,' ').trim().slice(0,160),duplicate:dup,selected:!dup});
+  };
+
+  // Strategy A: Employee name in column header (X), days down rows (Y)
+  if(ct){
+    const targetHeaderCells=[], allPersonHeaderCells=[];
+    structuredLines.forEach(ln=>{
+      if(!ln.cells||ln.cells.length<2) return;
+      ln.cells.forEach(c=>{
+        if(lineMatchesTargetName(c.str,ct)){
+          targetHeaderCells.push({page:ln.page||1,y:ln.y,x:c.x,w:c.w||40,str:c.str});
+        } else if(/^[A-ZÀ-ÖØ-Þa-zà-öø-ÿ]{3,}(?:[\s,]+[A-ZÀ-ÖØ-Þa-zà-öø-ÿ]{2,})*$/.test(c.str.trim())&&!/^(lun|mar|mer|gio|ven|sab|dom|data|giorno|turno|orario|note|reparto|totale|ore|mese|anno)/i.test(c.str.trim())){
+          allPersonHeaderCells.push({page:ln.page||1,y:ln.y,x:c.x,w:c.w||40,str:c.str});
+        }
+      });
+    });
+    if(targetHeaderCells.length>0){
+      targetHeaderCells.forEach(anchor=>{
+        const others=allPersonHeaderCells.filter(c=>c.page===anchor.page&&Math.abs(c.y-anchor.y)<=16);
+        let minX=anchor.x-35, maxX=anchor.x+Math.max(85,anchor.w+35);
+        others.forEach(o=>{
+          if(o.x<anchor.x) minX=Math.max(minX,(o.x+(o.w||30)+anchor.x)/2);
+          else if(o.x>anchor.x) maxX=Math.min(maxX,(o.x+anchor.x+(o.w||30))/2);
+        });
+        let activeDate='';
+        structuredLines.forEach(ln=>{
+          if((ln.page||1)!==anchor.page||ln.y>=anchor.y-4) return;
+          let rowIso='';
+          const fdm=ln.text.match(/\b(\d{1,2})\s*[\/\-]\s*(\d{1,2})(?:\s*[\/\-]\s*(\d{2,4}))?\b/);
+          const dlc=(ln.cells||[]).find(c=>c.x<minX&&/^(?:lun|mar|mer|gio|ven|sab|dom)?[a-zà-ù.]*\s*(\d{1,2})\b/i.test(c.str.trim()));
+          if(fdm) rowIso=resolveDateFromTokens(fdm[1],fdm[2],fdm[3],ctxYear,ctxMonth);
+          else if(dlc) rowIso=resolveDateFromTokens(dlc.str.trim().match(/(\d{1,2})/)[1],ctxMonth,ctxYear,ctxYear,ctxMonth);
+          if(rowIso) activeDate=rowIso;
+          if(!activeDate) return;
+          const myCells=(ln.cells||[]).filter(c=>{const cx=c.x+(c.w||0)/2;return cx>=minX&&cx<=maxX&&!lineMatchesTargetName(c.str,ct);});
+          if(myCells.length>0){
+            const cc=myCells.map(c=>c.str).join(' ').trim();
+            if(cc&&!/^[-/._\s]+$/.test(cc)) addRow(activeDate,cc);
+          }
+        });
+      });
+      if(rows.length>0) return rows;
+    }
+  }
+
+  // Strategy B: Days (1..31) across columns (X), employee name on row (Y)
+  const headerCandidates=structuredLines.filter(ln=>ln.cells&&ln.cells.length>=4&&ln.cells.filter(c=>/^(?:lun|mar|mer|gio|ven|sab|dom)?\s*(?:0?[1-9]|[12]\d|3[01])(?:\s*[a-z]{2,4})?$/i.test(c.str.trim())).length>=4);
+  if(headerCandidates.length>0&&ct){
+    headerCandidates.forEach(hdr=>{
+      const dayColumns=hdr.cells.filter(c=>/^(?:lun|mar|mer|gio|ven|sab|dom)?\s*(?:0?[1-9]|[12]\d|3[01])(?:\s*[a-z]{2,4})?$/i.test(c.str.trim())).map(c=>{
+        const dn=c.str.trim().match(/(\d{1,2})/)[1];
+        return{day:Number(dn),x:c.x+(c.w||0)/2,iso:resolveDateFromTokens(dn,ctxMonth,ctxYear,ctxYear,ctxMonth)};
+      }).filter(col=>Boolean(col.iso));
+      for(let idx=0;idx<structuredLines.length;idx++){
+        const ln=structuredLines[idx];
+        if(ln===hdr||(ln.page||1)!==(hdr.page||1)||!ln.cells?.length) continue;
+        if(!lineMatchesTargetName(ln.text,ct)) continue;
+        const candRows=[ln], nextLn=structuredLines[idx+1];
+        if(nextLn&&(nextLn.page||1)===(ln.page||1)&&Math.abs(ln.y-nextLn.y)<=18&&!looksLikeAnotherPersonOrHeader(nextLn.text,ct)) candRows.push(nextLn);
+        const matched=new Map();
+        candRows.forEach(rl=>(rl.cells||[]).forEach(cell=>{
+          if(lineMatchesTargetName(cell.str,ct)) return;
+          const cx=cell.x+(cell.w||0)/2; let best=null, distMin=42;
+          dayColumns.forEach(col=>{const d=Math.abs(cx-col.x);if(d<distMin){distMin=d;best=col;}});
+          if(best) matched.set(best.iso,`${matched.get(best.iso)||''} ${cell.str}`.trim());
+        }));
+        matched.forEach((val,iso)=>{if(val&&!/^[-/._\s]+$/.test(val))addRow(iso,val);});
+      }
+    });
+    if(rows.length>0) return rows;
+  }
+
+  // Strategy C: line-by-line with target isolation
+  const expanded=[];
+  structuredLines.forEach(ln=>ln.text.split(/\s+[·|]\s+/).forEach(p=>{if(p.trim())expanded.push(p.trim());}));
+  if(ct&&!expanded.some(l=>lineMatchesTargetName(l,ct))) return [];
+
+  let activeSection=!ct, currentDate='';
+  expanded.forEach(line=>{
+    const dateRegex=/\b(\d{1,2})\s*[\/\-]\s*(\d{1,2})(?:\s*[\/\-]\s*(\d{2,4}))?\b/g;
+    const directMatch=ct?lineMatchesTargetName(line,ct):true;
+    const wdMatch=line.match(/\b(?:lun(?:edi|\.)?|mar(?:tedi|\.)?|mer(?:coledi|\.)?|gio(?:vedi|\.)?|ven(?:erdi|\.)?|sab(?:ato|\.)?|dom(?:enica|\.)?)\s+(\d{1,2})\b/i);
+    if(ct){
+      if(directMatch) activeSection=true;
+      else if(looksLikeAnotherPersonOrHeader(line,ct)) { activeSection=false; return; }
+      else if(!activeSection) return;
+    }
+    const matches=[...line.matchAll(dateRegex)];
+    if(matches.length>1){
+      matches.forEach((m,i)=>{
+        const end=i+1<matches.length?matches[i+1].index:line.length;
+        const seg=line.slice(m.index,end).trim();
+        const iso=resolveDateFromTokens(m[1],m[2],m[3],ctxYear,ctxMonth);
+        if(iso){currentDate=iso;addRow(iso,seg);}
+      }); return;
+    }
+    if(matches.length===1){
+      const m=matches[0], iso=resolveDateFromTokens(m[1],m[2],m[3],ctxYear,ctxMonth);
+      if(iso) currentDate=iso;
+      const rest=line.replace(m[0],'').trim();
+      if(iso&&isShiftMeaningful(rest||line)) addRow(iso,rest||line);
+      return;
+    }
+    if(wdMatch){
+      const iso=resolveDateFromTokens(wdMatch[1],ctxMonth,ctxYear,ctxYear,ctxMonth);
+      if(iso){currentDate=iso;const after=line.slice(wdMatch.index+wdMatch[0].length).trim();if(isShiftMeaningful(after))addRow(iso,after);}
+      return;
+    }
+    if(currentDate&&isShiftMeaningful(line)) addRow(currentDate,line);
+  });
+  return rows;
+}
+
+function renderImportPreviewList() {
+  const section=document.getElementById('import-preview-section'), list=document.getElementById('import-preview-list');
+  if(!section||!list) return;
+  section.classList.toggle('hidden',pendingExtractedRows.length===0);
+  list.innerHTML=pendingExtractedRows.map(r=>`<div class="p-3 rounded-xl bg-[#11151d] border ${r.duplicate?'border-amber-500/40':'border-[#232936]'} flex flex-col gap-2.5 text-xs">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <label class="flex items-center gap-2 font-semibold text-white cursor-pointer">
+        <input type="checkbox" ${r.selected?'checked':''} onchange="togglePreviewRow('${r.tempId}',this.checked)" class="rounded accent-[#d4f824]" />
+        <span>${formatDateIT(r.date)}</span>
+        ${r.duplicate?`<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">Duplicato</span>`:''}
+      </label>
+      <button onclick="removePreviewRow('${r.tempId}')" class="text-rose-400 hover:text-rose-300">Rimuovi</button>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+      <div><label class="block text-[10px] text-[#8892a4] mb-0.5">Data</label><input type="date" value="${r.date}" onchange="updatePreviewRowField('${r.tempId}','date',this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" /></div>
+      <div><label class="block text-[10px] text-[#8892a4] mb-0.5">Inizio</label><input type="time" value="${r.start||''}" onchange="updatePreviewRowField('${r.tempId}','start',this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" /></div>
+      <div><label class="block text-[10px] text-[#8892a4] mb-0.5">Fine</label><input type="time" value="${r.end||''}" onchange="updatePreviewRowField('${r.tempId}','end',this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" /></div>
+      <div><label class="block text-[10px] text-[#8892a4] mb-0.5">Tipo</label>
+        <select onchange="updatePreviewRowType('${r.tempId}',this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white">
+          ${state.shiftTypes.map(st=>`<option value="shift:${st.id}" ${r.kind==='shift'&&r.typeId===st.id?'selected':''}>${escapeHTML(st.label)}</option>`).join('')}
+          <option value="absence:ferie" ${r.kind==='absence'&&r.absenceCategory==='ferie'?'selected':''}>Assenza: Ferie</option>
+          <option value="absence:permesso" ${r.kind==='absence'&&r.absenceCategory==='permesso'?'selected':''}>Assenza: Permesso</option>
+          <option value="absence:malattia" ${r.kind==='absence'&&r.absenceCategory==='malattia'?'selected':''}>Assenza: Malattia</option>
+        </select>
+      </div>
+    </div>
+    <div class="text-[11px] text-[#8892a4] truncate">${escapeHTML(r.note||'')}</div>
+  </div>`).join('');
+}
+function updatePreviewRowField(id,field,val){const r=pendingExtractedRows.find(x=>x.tempId===id);if(r){r[field]=val;renderImportPreviewList();}}
+function updatePreviewRowType(id,val){const r=pendingExtractedRows.find(x=>x.tempId===id);if(!r||!val)return;const[kind,sub]=val.split(':');r.kind=kind;if(kind==='absence')r.absenceCategory=sub;else r.typeId=sub;renderImportPreviewList();}
+function togglePreviewRow(id,checked){const r=pendingExtractedRows.find(x=>x.tempId===id);if(r)r.selected=checked;}
+function removePreviewRow(id){pendingExtractedRows=pendingExtractedRows.filter(r=>r.tempId!==id);renderImportPreviewList();}
+function confirmImportedRows(){
+  const sel=pendingExtractedRows.filter(r=>r.selected);
+  if(!sel.length){showToast('Seleziona almeno una riga.');return;}
+  let as=0,ab=0;
+  sel.forEach(r=>{
+    if(r.kind==='absence'){
+      const catMap={ferie:'leave',permesso:'permit',malattia:'sick'};
+      const mappedCat=catMap[r.absenceCategory]||r.absenceCategory||'leave';
+      state.absences.push({id:'abs_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),category:mappedCat,type:r.absenceCategory==='permesso'?'Permesso / Recupero':r.absenceCategory==='malattia'?'Malattia':'Ferie',startDate:r.date,endDate:r.date,days:1,hours:0,notes:r.note||'Importato'});
+      ab++;
+    } else {
+      state.shifts.push({id:'sh_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),date:r.date,typeId:r.typeId||'other',start:r.start||'',end:r.end||'',location:state.profile.department||'',notes:r.note||'Importato',color:''});
+      as++;
+    }
+  });
+  pendingExtractedRows=[];saveState();renderCurrentView();showToast(`Importati ${as} turni e ${ab} assenze.`);
+}
+function inspectSavedDoc(docId){
+  const doc=state.importedDocs.find(d=>d.id===docId);if(!doc)return;
+  openModal(`<div class="flex items-center justify-between mb-3"><h3 class="text-base font-bold text-white truncate pr-2">${escapeHTML(doc.name)}</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+  <div class="text-xs text-[#8892a4] mb-3">Data: ${formatDateIT(doc.date)} · Voci: ${doc.importedCount||0}</div>
+  <pre class="p-3 rounded-xl bg-[#0d0f14] border border-[#232936] text-[11px] text-slate-300 whitespace-pre-wrap max-h-72 overflow-y-auto">${escapeHTML(doc.extractedText||'Nessun testo.')}</pre>`);
+}
+
+// ============================================================
+// ABSENCES
+// ============================================================
+function renderAbsencesView() {
+  const yr=new Date().getFullYear(), ya=state.absences.filter(a=>a.startDate?.startsWith(String(yr)));
+  const leaveDays=ya.filter(a=>a.category==='leave').reduce((s,a)=>s+(Number(a.days)||1),0);
+  const permitDays=ya.filter(a=>a.category==='permit').reduce((s,a)=>s+(Number(a.days)||1),0);
+  const sickDays=ya.filter(a=>a.category==='sick').reduce((s,a)=>s+(Number(a.days)||1),0);
+  const overtimeHrs=ya.filter(a=>a.category==='overtime').reduce((s,a)=>s+(Number(a.hours)||0),0);
+  return `<div class="space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('absEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('absTitle')}</h1></div>
+      <button onclick="openAbsenceModal()" class="lime-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm inline-flex items-center gap-1.5 self-start sm:self-auto"><i data-lucide="plus" class="w-4 h-4"></i><span>${t('newAbsenceBtn')}</span></button>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      ${[[t('leaveCard'),'umbrella',leaveDays+' gg'],[t('permitCard'),'clock',permitDays+' gg'],[t('sickCard'),'heart-pulse',sickDays+' gg'],[t('overtimeCard'),'zap',formatHours(overtimeHrs)]].map(([l,ic,v])=>`<div class="saas-card p-4"><div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>${l}</span><i data-lucide="${ic}" class="w-3.5 h-3.5"></i></div><div class="text-2xl font-bold text-white mt-2">${v}</div></div>`).join('')}
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-3">
+      <div class="flex items-center justify-between"><h2 class="text-base font-semibold text-white">${t('absLogTitle')}</h2><span class="text-xs text-[#8892a4]">${t('absLogSub')}</span></div>
+      ${state.absences.length===0?`<div class="dashed-empty py-8 px-4 text-center"><div class="text-sm text-[#cbd5e1] font-medium">${t('noAbsences')}</div><div class="text-xs text-[#8892a4] mt-1">${t('noAbsencesHint')}</div></div>`:`<div class="space-y-2">${state.absences.slice().sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||'')).map(ab=>`
+        <div class="p-3.5 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-3">
+          <div><div class="text-sm font-semibold text-white">${escapeHTML(ab.type)}</div><div class="text-xs text-[#8892a4]">${formatDateIT(ab.startDate)}${ab.endDate&&ab.endDate!==ab.startDate?' → '+formatDateIT(ab.endDate):''} · ${ab.category==='overtime'?formatHours(ab.hours):(ab.days||1)+' gg'}</div></div>
+          <button onclick="deleteAbsence('${ab.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 text-xs">${t('deleteBtn')}</button>
+        </div>`).join('')}</div>`}
+    </div>
+  </div>`;
+}
+function openAbsenceModal() {
+  const today=toISODate(new Date());
+  openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Nuova assenza / straordinario</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+  <form onsubmit="saveAbsenceForm(event)" class="space-y-3.5">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Categoria</label>
+      <select name="category" onchange="document.getElementById('abs-ot').classList.toggle('hidden',this.value!=='overtime');document.getElementById('abs-days').classList.toggle('hidden',this.value==='overtime')" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white">
+        <option value="leave">Ferie / Licenza</option><option value="permit">Permesso / Recupero</option><option value="sick">Malattia</option><option value="overtime">Straordinario</option>
+      </select>
+    </div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Descrizione</label><input name="type" type="text" required placeholder="Es. Ferie estive..." class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Inizio</label><input name="startDate" type="date" required value="${today}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+      <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Fine</label><input name="endDate" type="date" value="${today}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    </div>
+    <div id="abs-days"><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Giorni</label><input name="days" type="number" min="0.5" step="0.5" value="1" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div id="abs-ot" class="hidden"><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Ore straordinario</label><input name="hours" type="number" min="0.5" step="0.5" value="2" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Note</label><input name="notes" type="text" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
+  </form>`);
+}
+function saveAbsenceForm(e){e.preventDefault();const fd=new FormData(e.target);state.absences.push({id:'abs_'+Date.now(),category:fd.get('category'),type:(fd.get('type')||'').trim(),startDate:fd.get('startDate'),endDate:fd.get('endDate')||fd.get('startDate'),days:Number(fd.get('days'))||1,hours:Number(fd.get('hours'))||0,notes:(fd.get('notes')||'').trim()});saveState();closeModal();renderCurrentView();showToast('Registrazione salvata.');}
+function deleteAbsence(id){state.absences=state.absences.filter(a=>a.id!==id);saveState();renderCurrentView();showToast('Voce eliminata.');}
+
+// ============================================================
+// INCOMES
+// ============================================================
+function renderIncomesView(){
+  const now=new Date(),yr=now.getFullYear(),m=getMonthMetrics(yr,now.getMonth()),yt=getAnnualIncomeTotal(yr),avg=yt/(now.getMonth()+1);
+  return `<div class="space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('incEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('incTitle')}</h1></div>
+      <button onclick="openIncomeModal()" class="lime-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm inline-flex items-center gap-1.5 self-start sm:self-auto"><i data-lucide="plus" class="w-4 h-4"></i><span>${t('newIncomeBtn')}</span></button>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('yearIncomeCard')}</div><div class="text-2xl font-bold text-[#22c55e] mt-2">${formatCurrency(yt)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('currMonthCard')}</div><div class="text-2xl font-bold text-white mt-2">${formatCurrency(m.income)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('monthlyAvgCard')}</div><div class="text-2xl font-bold text-white mt-2">${formatCurrency(avg)}</div></div>
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-3">
+      <div class="flex items-center justify-between"><h2 class="text-base font-semibold text-white">${t('incHistoryTitle')}</h2><button onclick="navigate('riepilogo')" class="text-xs text-[#9aa4b6] hover:text-white">${t('compareByMonthLink')}</button></div>
+      ${state.incomes.length===0?`<div class="dashed-empty py-8 px-4 text-center"><div class="text-sm text-[#cbd5e1]">${t('noIncome')}</div><div class="text-xs text-[#8892a4] mt-1">${t('noIncomeHint')}</div></div>`:`<div class="space-y-2">${state.incomes.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(inc=>`
+        <div class="p-3.5 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-3">
+          <div><div class="text-sm font-semibold text-white">${escapeHTML(inc.title||'Entrata')} ${inc.recurringMonthly?`<span class="ml-1.5 text-[10px] px-2 py-0.5 rounded-full bg-[#d4f824]/15 text-[#d4f824]">Ricorrente</span>`:''}</div><div class="text-xs text-[#8892a4]">${formatDateIT(inc.date)} · ${escapeHTML(inc.kind||'Stipendio')}</div></div>
+          <div class="flex items-center gap-3"><span class="text-sm font-bold text-[#22c55e]">+${formatCurrency(inc.amount)}</span><button onclick="deleteIncome('${inc.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-500/15 text-rose-300 text-xs">${t('deleteBtn')}</button></div>
+        </div>`).join('')}</div>`}
+    </div>
+  </div>`;
+}
+function openIncomeModal(){openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Nuova entrata</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+<form onsubmit="saveIncomeForm(event)" class="space-y-3.5">
+  <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Descrizione</label><input name="title" type="text" required placeholder="Es. Stipendio netto..." class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+  <div class="grid grid-cols-2 gap-3">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Importo (€)</label><input name="amount" type="number" step="0.01" min="0.01" required class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Data</label><input name="date" type="date" required value="${toISODate(new Date())}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+  </div>
+  <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Tipologia</label><select name="kind" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white"><option>Stipendio</option><option>Straordinari / Indennità</option><option>Variabile / Extra</option></select></div>
+  <label class="flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer"><input name="recurringMonthly" type="checkbox" class="rounded accent-[#d4f824]" /><span>Ricorrente ogni mese</span></label>
+  <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
+</form>`);}
+function saveIncomeForm(e){e.preventDefault();const fd=new FormData(e.target);state.incomes.push({id:'inc_'+Date.now(),title:(fd.get('title')||'').trim(),amount:Number(fd.get('amount'))||0,date:fd.get('date'),kind:fd.get('kind'),recurringMonthly:fd.get('recurringMonthly')==='on'});saveState();closeModal();renderCurrentView();showToast('Entrata salvata.');}
+function deleteIncome(id){state.incomes=state.incomes.filter(i=>i.id!==id);saveState();renderCurrentView();showToast('Entrata eliminata.');}
+
+// ============================================================
+// EXPENSES
+// ============================================================
+function getFilteredExpenses(){
+  return state.expenses.filter(exp=>{
+    if(expenseFilterMonth&&exp.date&&!exp.date.startsWith(expenseFilterMonth)&&!exp.recurringMonthly) return false;
+    if(expenseFilterCategory!=='ALL'&&exp.category!==expenseFilterCategory) return false;
+    if(expenseSearchQuery.trim()){const q=expenseSearchQuery.trim().toLowerCase();if(!(exp.description||'').toLowerCase().includes(q)&&!(exp.category||'').toLowerCase().includes(q)) return false;}
+    return true;
+  });
+}
+function handleExpenseSearchInput(el){expenseSearchQuery=el.value;const c=document.getElementById('expenses-list-container');if(c)c.innerHTML=renderExpensesListHtml(getFilteredExpenses());}
+function renderExpensesView(){
+  const now=new Date(),yr=now.getFullYear(),m=getMonthMetrics(yr,now.getMonth()),yt=getAnnualExpensesTotal(yr),fil=getFilteredExpenses(),ft=fil.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  return `<div class="space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('expEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('expTitle')}</h1></div>
+      <button onclick="openExpenseModal()" class="lime-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm inline-flex items-center gap-1.5 self-start sm:self-auto"><i data-lucide="plus" class="w-4 h-4"></i><span>${t('newExpenseBtn')}</span></button>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('currMonthCard')}</div><div class="text-2xl font-bold text-rose-400 mt-2">${formatCurrency(m.expenses)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('currYearCard')}</div><div class="text-2xl font-bold text-white mt-2">${formatCurrency(yt)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('filteredTotalCard')}</div><div class="text-2xl font-bold text-white mt-2">${formatCurrency(ft)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('movementsCard')}</div><div class="text-2xl font-bold text-white mt-2">${fil.length}</div></div>
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-3">
+      <div class="flex items-center justify-between"><h2 class="text-sm font-bold text-white">${t('shortcutsTitle')}</h2><button onclick="openShortcutsModal()" class="text-xs text-[#9aa4b6] hover:text-white">${t('customizeBtn')}</button></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">${state.shortcuts.map(sc=>`<button onclick="triggerShortcut('${sc.id}')" class="py-2.5 px-3.5 rounded-xl bg-[#11151d] hover:bg-[#19202c] border border-[#232936] hover:border-[#d4f824]/50 text-xs sm:text-sm font-semibold text-white transition-all">${escapeHTML(sc.label)}</button>`).join('')}</div>
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <h3 class="font-semibold text-base text-white">${t('expListTitle')}</h3>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="expense-search-input" type="text" value="${escapeHTML(expenseSearchQuery)}" oninput="handleExpenseSearchInput(this)" placeholder="${t('searchPlaceholder')}" class="px-3 py-2 rounded-xl bg-[#11151d] border border-[#232936] text-xs text-white" />
+          <input type="month" value="${expenseFilterMonth}" onchange="expenseFilterMonth=this.value;renderCurrentView();" class="px-3 py-2 rounded-xl bg-[#11151d] border border-[#232936] text-xs text-white" />
+          <select onchange="expenseFilterCategory=this.value;renderCurrentView();" class="px-3 py-2 rounded-xl bg-[#11151d] border border-[#232936] text-xs text-white">
+            <option value="ALL" ${expenseFilterCategory==='ALL'?'selected':''}>${t('allCategoriesOpt')}</option>
+            ${state.expenseCategories.map(c=>`<option value="${escapeHTML(c)}" ${expenseFilterCategory===c?'selected':''}>${escapeHTML(c)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div id="expenses-list-container">${renderExpensesListHtml(fil)}</div>
+    </div>
+  </div>`;
+}
+function renderExpensesListHtml(filtered){
+  if(!filtered||!filtered.length) return `<div class="dashed-empty py-8 text-center text-xs text-[#8892a4]">${t('noExpenseFilter')}</div>`;
+  return `<div class="space-y-2">${filtered.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(exp=>`
+    <div class="p-3.5 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between gap-3">
+      <div><div class="text-sm font-semibold text-white">${escapeHTML(exp.category)} ${exp.description?`<span class="text-xs font-normal text-[#8892a4]">· ${escapeHTML(exp.description)}</span>`:''}</div><div class="text-xs text-[#8892a4]">${formatDateIT(exp.date)}${exp.recurringMonthly?' · Ricorrente':''}</div></div>
+      <div class="flex items-center gap-3"><span class="text-sm font-bold text-rose-400">-${formatCurrency(exp.amount)}</span><button onclick="deleteExpense('${exp.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-500/15 text-rose-300 text-xs">${t('deleteBtn')}</button></div>
+    </div>`).join('')}</div>`;
+}
+function triggerShortcut(id){const sc=state.shortcuts.find(s=>s.id===id);if(!sc)return;state.expenses.push({id:'exp_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),amount:Number(sc.amount)||0,category:sc.category||'Altro',date:toISODate(new Date()),description:sc.description||sc.label,recurringMonthly:false});saveState();renderCurrentView();showToast(`Registrato: ${sc.label}`);}
+function openExpenseModal(){openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Nuova uscita</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+<form onsubmit="saveExpenseForm(event)" class="space-y-3.5">
+  <div class="grid grid-cols-2 gap-3">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Importo (€)</label><input name="amount" type="number" step="0.01" min="0.01" required class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Categoria</label><select name="category" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white">${state.expenseCategories.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('')}</select></div>
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Data</label><input name="date" type="date" required value="${toISODate(new Date())}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Descrizione</label><input name="description" type="text" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+  </div>
+  <label class="flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer"><input name="recurringMonthly" type="checkbox" class="rounded accent-[#d4f824]" /><span>Uscita ricorrente mensile</span></label>
+  <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
+</form>`);}
+function saveExpenseForm(e){e.preventDefault();const fd=new FormData(e.target);state.expenses.push({id:'exp_'+Date.now(),amount:Number(fd.get('amount'))||0,category:fd.get('category'),date:fd.get('date'),description:(fd.get('description')||'').trim(),recurringMonthly:fd.get('recurringMonthly')==='on'});saveState();closeModal();renderCurrentView();showToast('Uscita registrata.');}
+function deleteExpense(id){state.expenses=state.expenses.filter(e=>e.id!==id);saveState();renderCurrentView();showToast('Uscita eliminata.');}
+function openShortcutsModal(){openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Personalizza scorciatoie</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+<form onsubmit="saveShortcutsForm(event)" class="space-y-3">
+  ${state.shortcuts.map((sc,i)=>`<div class="p-3 rounded-xl bg-[#11151d] border border-[#232936] grid grid-cols-1 sm:grid-cols-3 gap-2">
+    <input name="amount_${i}" type="number" step="0.01" value="${sc.amount}" class="px-2.5 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" placeholder="€" />
+    <select name="category_${i}" class="px-2.5 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white">${state.expenseCategories.map(c=>`<option value="${escapeHTML(c)}" ${sc.category===c?'selected':''}>${escapeHTML(c)}</option>`).join('')}</select>
+    <input name="desc_${i}" type="text" value="${escapeHTML(sc.description||sc.category)}" class="px-2.5 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white" />
+  </div>`).join('')}
+  <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
+</form>`);}
+function saveShortcutsForm(e){e.preventDefault();const fd=new FormData(e.target);state.shortcuts=state.shortcuts.map((sc,i)=>{const a=Number(fd.get(`amount_${i}`))||sc.amount,c=fd.get(`category_${i}`)||sc.category,d=(fd.get(`desc_${i}`)||c).trim();return{...sc,amount:a,category:c,description:d,label:`+ ${a.toFixed(2)} € ${d}`};});saveState();closeModal();renderCurrentView();showToast('Scorciatoie aggiornate.');}
+
+// ============================================================
+// SUBSCRIPTIONS
+// ============================================================
+function renderSubscriptionsView(){
+  const active=state.subscriptions.filter(s=>s.status==='active'),mc=active.reduce((a,s)=>a+getSubscriptionMonthlyEquivalent(s),0),yc=mc*12;
+  const list=subscriptionStatusFilter==='ALL'?state.subscriptions:state.subscriptions.filter(s=>s.status===subscriptionStatusFilter);
+  return `<div class="space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('subEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('subTitle')}</h1></div>
+      <button onclick="openSubscriptionModal()" class="lime-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm inline-flex items-center gap-1.5 self-start sm:self-auto"><i data-lucide="plus" class="w-4 h-4"></i><span>${t('newSubBtn')}</span></button>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('monthlyCostCard')}</div><div class="text-2xl font-bold text-white mt-2">${formatCurrency(mc)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('yearlyCostCard')}</div><div class="text-2xl font-bold text-white mt-2">${formatCurrency(yc)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('statusCard')}</div><div class="text-2xl font-bold text-[#d4f824] mt-2">${active.length} ${t('activeCountLabel')}</div></div>
+    </div>
+    <div class="saas-card p-4 sm:p-5 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-base font-semibold text-white">${t('yourSubsTitle')}</h2>
+        <div class="inline-flex rounded-lg bg-[#0d0f14] p-1 border border-[#232936] text-xs">
+          ${[['ALL',t('allFilter'),''],['active',t('activeFilter'),'text-[#22c55e]'],['paused',t('pausedFilter'),'text-amber-300'],['cancelled',t('cancelledFilter'),'text-rose-300']].map(([v,l,c])=>`<button onclick="subscriptionStatusFilter='${v}';renderCurrentView();" class="px-2.5 py-1 rounded ${subscriptionStatusFilter===v?'bg-[#1f2736] font-semibold '+c:'text-[#8892a4]'}">${l}</button>`).join('')}
+        </div>
+      </div>
+      ${list.length===0?`<div class="dashed-empty py-8 px-4 text-center"><div class="text-sm text-[#cbd5e1]">${t('noSubs')}</div><div class="text-xs text-[#8892a4] mt-1">${t('noSubsHint')}</div></div>`:`<div class="space-y-2">${list.map(sub=>`
+        <div class="p-3.5 rounded-xl bg-[#11151d] border border-[#232936] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-semibold text-white flex items-center gap-2"><span>${escapeHTML(sub.name)}</span><span class="text-[10px] px-2 py-0.5 rounded-full ${sub.status==='active'?'bg-emerald-500/15 text-emerald-300':sub.status==='paused'?'bg-amber-500/15 text-amber-300':'bg-rose-500/15 text-rose-300'}">${sub.status}</span></div>
+            <div class="text-xs text-[#8892a4]">${escapeHTML(sub.frequency||'monthly')} · Rinnovo: ${sub.nextDate?formatDateIT(sub.nextDate):'—'}</div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <span class="text-sm font-bold text-white">${formatCurrency(sub.amount)}</span>
+            <button onclick="cycleSubscriptionStatus('${sub.id}')" class="px-2.5 py-1 rounded-lg bg-[#1a202c] hover:bg-[#242c3d] text-xs text-slate-200">Stato</button>
+            <button onclick="deleteSubscription('${sub.id}')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-300 text-xs">${t('deleteBtn')}</button>
+          </div>
+        </div>`).join('')}</div>`}
+    </div>
+  </div>`;
+}
+function openSubscriptionModal(){openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Nuovo abbonamento</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+<form onsubmit="saveSubscriptionForm(event)" class="space-y-3.5">
+  <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Nome servizio</label><input name="name" type="text" required placeholder="Es. Netflix, Spotify..." class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+  <div class="grid grid-cols-2 gap-3">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Importo (€)</label><input name="amount" type="number" step="0.01" min="0.01" required class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Frequenza</label><select name="frequency" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white"><option value="monthly">Mensile</option><option value="quarterly">Trimestrale</option><option value="yearly">Annuale</option><option value="weekly">Settimanale</option></select></div>
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Prossimo rinnovo</label><input name="nextDate" type="date" value="${toISODate(new Date())}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Stato</label><select name="status" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white"><option value="active">Attivo</option><option value="paused">Sospeso</option><option value="cancelled">Disdetto</option></select></div>
+  </div>
+  <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Note</label><input name="notes" type="text" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+  <div class="flex justify-end gap-2 pt-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
+</form>`);}
+function saveSubscriptionForm(e){e.preventDefault();const fd=new FormData(e.target);state.subscriptions.push({id:'sub_'+Date.now(),name:(fd.get('name')||'').trim(),amount:Number(fd.get('amount'))||0,frequency:fd.get('frequency')||'monthly',nextDate:fd.get('nextDate')||'',status:fd.get('status')||'active',notes:(fd.get('notes')||'').trim()});saveState();closeModal();renderCurrentView();showToast('Abbonamento salvato.');}
+function cycleSubscriptionStatus(id){const o=['active','paused','cancelled'];state.subscriptions=state.subscriptions.map(s=>s.id!==id?s:{...s,status:o[(o.indexOf(s.status)+1)%o.length]});saveState();renderCurrentView();}
+function deleteSubscription(id){state.subscriptions=state.subscriptions.filter(s=>s.id!==id);saveState();renderCurrentView();showToast('Abbonamento eliminato.');}
+
+// ============================================================
+// SUMMARY
+// ============================================================
+function renderSummaryView(){
+  const now=new Date(),yr=now.getFullYear(),ti=getAnnualIncomeTotal(yr),te=getAnnualExpensesTotal(yr);
+  const asc=state.subscriptions.filter(s=>s.status==='active'),asc12=asc.reduce((a,s)=>a+getSubscriptionMonthlyEquivalent(s),0)*12;
+  const totOut=te+asc12,net=ti-totOut,sp=ti>0?Math.min(100,Math.round((totOut/ti)*100)):0;
+  const m12=[];
+  for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),md=getMonthMetrics(d.getFullYear(),d.getMonth()),out=md.expenses+md.subscriptionsMonthly;m12.push({label:d.toLocaleDateString(state.lang==='en'?'en-US':'it-IT',{month:'short',year:'2-digit'}).replace('.',''),income:md.income,out,balance:md.income-out});}
+  const max12=Math.max(100,...m12.map(x=>Math.max(x.income,x.out)));
+  const catTot={};
+  state.expenses.forEach(exp=>{
+    if(!exp.date)return;const[ey,em]=exp.date.split('-').map(Number);const cat=exp.category||'Altro';
+    if(exp.recurringMonthly){const cnt=ey<yr?12:ey===yr?Math.max(0,12-(em-1)):0;if(cnt>0)catTot[cat]=(catTot[cat]||0)+(Number(exp.amount)||0)*cnt;}
+    else if(ey===yr)catTot[cat]=(catTot[cat]||0)+(Number(exp.amount)||0);
+  });
+  const cats=Object.entries(catTot).sort((a,b)=>b[1]-a[1]),maxCat=Math.max(1,...cats.map(x=>x[1]));
+  return `<div class="space-y-5">
+    <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('sumEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('sumTitle')}</h1></div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('yearIncomeCard')}</div><div class="text-xl sm:text-2xl font-bold text-[#22c55e] mt-2">${formatCurrency(ti)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('yearOutCard')}</div><div class="text-xl sm:text-2xl font-bold text-rose-400 mt-2">${formatCurrency(totOut)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('balanceCard')}</div><div class="text-xl sm:text-2xl font-bold ${net>=0?'text-[#22c55e]':'text-rose-400'} mt-2">${formatCurrency(net)}</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('incomeSpentCard')}</div><div class="text-xl sm:text-2xl font-bold text-white mt-2">${sp}%</div></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-7 saas-card p-4 sm:p-5">
+        <div class="flex items-center justify-between mb-3"><h2 class="text-sm sm:text-base font-semibold text-white">${t('last12MonthsTitle')}</h2></div>
+        <div class="h-48 flex items-end justify-between gap-1.5 pt-4 border-b border-[#232936] pb-2">
+          ${m12.map(m=>{const hi=Math.max(2,Math.round((m.income/max12)*140)),ho=Math.max(2,Math.round((m.out/max12)*140));return`<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full flex items-end justify-center gap-0.5 h-36"><div class="w-2 rounded-t bg-[#d4f824]" style="height:${hi}px"></div><div class="w-2 rounded-t bg-sky-400" style="height:${ho}px"></div></div><span class="text-[9px] text-[#8892a4] truncate max-w-full">${m.label}</span></div>`;}).join('')}
+        </div>
+      </div>
+      <div class="lg:col-span-5 saas-card p-4 sm:p-5">
+        <h2 class="text-sm sm:text-base font-semibold text-white mb-3">${t('expByCatTitle')}</h2>
+        ${cats.length===0?`<div class="dashed-empty py-10 text-center text-xs text-[#8892a4]">${t('noExpYear')}</div>`:`<div class="space-y-3">${cats.map(([cat,val])=>{const p=Math.max(4,Math.round((val/maxCat)*100));return`<div><div class="flex justify-between text-xs mb-1"><span class="font-medium text-slate-200">${escapeHTML(cat)}</span><span class="font-semibold text-white">${formatCurrency(val)}</span></div><div class="w-full h-2 rounded-full bg-[#232936] overflow-hidden"><div class="h-full rounded-full bg-[#d4f824]" style="width:${p}%"></div></div></div>`;}).join('')}</div>`}
+      </div>
+    </div>
+    <div class="saas-card p-4 sm:p-5">
+      <div class="flex items-center justify-between mb-3"><h2 class="text-sm sm:text-base font-semibold text-white">${t('monthlyComparisonTitle')}</h2><span class="px-2.5 py-1 rounded-full bg-[#1a202c] border border-[#232936] text-[11px] text-slate-300">${t('last12MonthsBadge')}</span></div>
+      ${m12.every(x=>x.income===0&&x.out===0)?`<div class="dashed-empty py-7 text-center text-xs text-[#8892a4]">${t('noMovementsYet')}</div>`:`<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="border-b border-[#232936] text-[#8892a4]"><th class="py-2 pr-3">MESE</th><th class="py-2 px-3">${t('incomeRow').toUpperCase()}</th><th class="py-2 px-3">${t('expensesRow').toUpperCase()}</th><th class="py-2 pl-3 text-right">SALDO</th></tr></thead><tbody>${m12.map(r=>`<tr class="border-b border-[#232936]/50"><td class="py-2.5 pr-3 font-semibold text-white uppercase">${r.label}</td><td class="py-2.5 px-3 text-[#22c55e] font-medium">${formatCurrency(r.income)}</td><td class="py-2.5 px-3 text-rose-400 font-medium">${formatCurrency(r.out)}</td><td class="py-2.5 pl-3 text-right font-bold ${r.balance>=0?'text-white':'text-rose-400'}">${formatCurrency(r.balance)}</td></tr>`).join('')}</tbody></table></div>`}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function renderSettings(){
+  const w=state.dashboardWidgets;
+  return `<div class="space-y-5">
+    <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('cfgEyebrow')}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('cfgTitle')}</h1></div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="saas-card p-5 space-y-3.5">
+        <h2 class="text-base font-bold text-white">${t('profileBoxTitle')}</h2>
+        <form onsubmit="saveProfileSettings(event)" class="space-y-3">
+          <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">${t('profileNameLabel')}</label><input name="name" type="text" value="${escapeHTML(state.profile.name||currentUserId)}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+          <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">${t('profileRoleLabel')}</label><input name="role" type="text" value="${escapeHTML(state.profile.role||'')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+          <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">${t('profileDeptLabel')}</label><input name="department" type="text" value="${escapeHTML(state.profile.department||'')}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+          <button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">${t('saveProfileBtn')}</button>
+        </form>
+      </div>
+      <div class="saas-card p-5 space-y-3.5">
+        <h2 class="text-base font-bold text-white">${t('dashCustTitle')}</h2>
+        <p class="text-xs text-[#8892a4]">${t('dashCustSub')}</p>
+        <div class="space-y-2">
+          ${[['showKpis','KPI (saldo, ore, stipendio)'],['showShifts','Turni di oggi e prossimi'],['showReminders','Promemoria 24 ore'],['showBalanceChart','Bilancio e grafico 6 mesi'],['showBottomPanels','Pannelli inferiori (attività, rinnovi, assenze)']].map(([k,l])=>`<label class="flex items-center gap-3 cursor-pointer p-2 rounded-xl hover:bg-[#11151d]">
+            <input type="checkbox" ${w[k]?'checked':''} onchange="toggleDashWidget('${k}',this.checked)" class="accent-[#d4f824]" />
+            <span class="text-xs text-slate-200">${l}</span>
+          </label>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="saas-card p-5 space-y-3.5">
+      <h2 class="text-base font-bold text-white">${t('catCustTitle')}</h2>
+      <div class="flex gap-2">
+        <input id="new-cat-input" type="text" placeholder="${t('newCatPlaceholder')}" class="flex-1 px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" />
+        <button onclick="addExpenseCategory()" class="lime-btn px-4 py-2 rounded-xl text-xs">${t('addBtn')}</button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${state.expenseCategories.map(c=>`<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#11151d] border border-[#232936] text-xs text-slate-200">
+          <span>${escapeHTML(c)}</span>
+          <button onclick="removeExpenseCategory('${escapeHTML(c)}')" class="text-rose-400 hover:text-rose-300 ml-1">×</button>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="saas-card p-5 space-y-3.5">
+      <h2 class="text-base font-bold text-white">${t('backupBoxTitle')}</h2>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="exportAllJson()" class="px-3.5 py-2 rounded-xl bg-[#1a202c] hover:bg-[#242c3d] border border-[#2d3748] text-xs font-semibold text-white">${t('exportAllJsonBtn')}</button>
+        <button onclick="exportCsv()" class="px-3.5 py-2 rounded-xl bg-[#1a202c] hover:bg-[#242c3d] border border-[#2d3748] text-xs font-semibold text-white">${t('exportCsvBtn')}</button>
+        <label class="px-3.5 py-2 rounded-xl bg-[#1a202c] hover:bg-[#242c3d] border border-[#2d3748] text-xs font-semibold text-white cursor-pointer">${t('restoreJsonBtn')}<input type="file" accept=".json" onchange="restoreJson(event)" class="hidden" /></label>
+        <button onclick="resetProfileData()" class="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-xs font-semibold">${t('resetProfileBtn')}</button>
+      </div>
+      <p class="text-[11px] text-[#8892a4]">I dati vengono salvati localmente nel browser di questo dispositivo.</p>
+    </div>
+  </div>`;
+}
+function saveProfileSettings(e){e.preventDefault();const fd=new FormData(e.target);state.profile={...state.profile,name:(fd.get('name')||'').trim(),role:(fd.get('role')||'').trim(),department:(fd.get('department')||'').trim()};saveState();updateChromeLabels();showToast('Profilo salvato.');}
+function toggleDashWidget(key,val){state.dashboardWidgets[key]=val;saveState();}
+function addExpenseCategory(){const v=(document.getElementById('new-cat-input')?.value||'').trim();if(!v){showToast('Inserisci un nome categoria.');return;}if(state.expenseCategories.includes(v)){showToast('Categoria già presente.');return;}state.expenseCategories.push(v);saveState();renderCurrentView();showToast('Categoria aggiunta.');}
+function removeExpenseCategory(cat){state.expenseCategories=state.expenseCategories.filter(c=>c!==cat);saveState();renderCurrentView();}
+function exportAllJson(){const all={};getUsersIndex().forEach(u=>{try{all[u]=JSON.parse(localStorage.getItem(STORAGE_PREFIX+u)||'{}');}catch(_){}});const blob=new Blob([JSON.stringify(all,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`ritmo_backup_${toISODate(new Date())}.json`;a.click();}
+function exportCsv(){if(!state.expenses.length){showToast('Nessuna uscita da esportare.');return;}const rows=[['Data','Categoria','Importo','Descrizione','Ricorrente'],...state.expenses.map(e=>[e.date,e.category,e.amount,e.description||'',e.recurringMonthly?'Sì':'No'])];const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`ritmo_uscite_${toISODate(new Date())}.csv`;a.click();}
+function restoreJson(e){const f=e.target?.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const data=JSON.parse(ev.target.result);if(typeof data==='object'&&!Array.isArray(data)){Object.entries(data).forEach(([u,ud])=>{localStorage.setItem(STORAGE_PREFIX+u,JSON.stringify(ud));registerUserInIndex(u);});showToast('Backup ripristinato.');renderCurrentView();}else showToast('File JSON non valido.');}catch(_){showToast('Errore lettura JSON.');}};r.readAsText(f);}
+function resetProfileData(){if(!confirm('Azzerare tutti i dati del profilo attivo? Questa operazione è irreversibile.'))return;state={lang:state.lang,...createEmptyUserState(currentUserId)};saveState();renderCurrentView();showToast('Dati azzerati.');}
+
+// ============================================================
+// BOOT
+// ============================================================
+(function init(){
+  setupPWA();
+  loadUserState(currentUserId);
+  renderCurrentView();
+})();
+</script>
+</body>
+</html>
