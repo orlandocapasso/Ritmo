@@ -389,7 +389,8 @@ function createEmptyUserState(username) {
     aiConfig: { provider: 'gemini', apiKey: '', model: 'gemini-2.5-flash', customEndpoint: '' },
     shiftTypes: JSON.parse(JSON.stringify(DEFAULT_SHIFT_TYPES)),
     shifts: [], absences: [], incomes: [], expenses: [],
-    leaveAllowanceDays: 28,
+    leaveAllowanceDays: 0,
+    law937AllowanceDays: 0,
     activities: [], importedDocs: [],
     expenseCategories: [...DEFAULT_EXPENSE_CATEGORIES],
     shortcuts: JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS)),
@@ -461,7 +462,10 @@ function loadUserState(username) {
     state.expenseCategories.push('Abbonamenti');
   }
   if (typeof state.leaveAllowanceDays !== 'number') {
-    state.leaveAllowanceDays = 28;
+    state.leaveAllowanceDays = 0;
+  }
+  if (typeof state.law937AllowanceDays !== 'number') {
+    state.law937AllowanceDays = 0;
   }
   updateChromeLabels();
 }
@@ -767,7 +771,7 @@ function renderDashboard() {
         {label:t('monthBalance'), val:formatCurrency(metrics.balance), sub:t('monthBalanceSub'), color:metrics.balance>=0?'text-[#22c55e]':'text-rose-400', icon:'calendar', route:'riepilogo'},
         {label:t('monthIncome'), val:formatCurrency(metrics.income), sub:t('monthIncomeSub'), color:'text-white', icon:'trending-up', route:'entrate'},
         {label:t('monthExpenses'), val:formatCurrency(metrics.expenses), sub:`${metrics.expensesCount} ${t('movementsLabel')} · ${metrics.activeRecurringCount} ricorr.`, color:'text-white', icon:'credit-card', route:'spese'},
-        {label:'LICENZA RESIDUA', val:`${leaveStats.remaining} gg`, sub:`su ${leaveStats.total} gg (${leaveStats.used} fruiti)`, color:leaveStats.remaining>0?'text-[#d4f824]':'text-rose-400', icon:'umbrella', route:'assenze'},
+        {label:'LICENZA ORD. RESIDUA', val:leaveStats.total>0?`${leaveStats.remaining} gg`:'Da imp.', sub:leaveStats.total>0?`su ${leaveStats.total} gg (${leaveStats.used} fruiti)`:'Imposta in Assenze', color:leaveStats.total===0?'text-slate-300':(leaveStats.remaining>0?'text-[#d4f824]':'text-rose-400'), icon:'umbrella', route:'assenze'},
         {label:t('workedHours'), val:formatHours(metrics.workedHours), sub:`${metrics.shiftsCount} ${t('shiftsInMonthLabel')}`, color:'text-white', icon:'clock', route:'turni'},
         {label:t('overtimeHours'), val:formatHours(metrics.overtimeHours), sub:metrics.overtimeHours>0?t('overtimeInMonthLabel'):t('noOvertime'), color:'text-white', icon:'zap', route:'assenze'},
       ].map(k=>`<div onclick="navigate('${k.route}')" class="saas-card p-3.5 sm:p-4 cursor-pointer hover:border-[#343e52]">
@@ -972,6 +976,7 @@ function getAbsencesForDate(isoDate) {
 function getAbsenceBadgeStyle(cat) {
   if(cat==='sick'||cat==='malattia') return 'bg-rose-500/20 text-rose-200 border border-rose-500/40';
   if(cat==='riposo_937') return 'bg-violet-500/20 text-violet-200 border border-violet-500/40';
+  if(cat==='licenza_straordinaria'||cat==='licenza_straordinaria_uni'||cat==='licenza_straordinaria_mil') return 'bg-amber-500/20 text-amber-200 border border-amber-500/40';
   if(cat==='riposo'||cat==='permit') return 'bg-sky-500/20 text-sky-200 border border-sky-500/40';
   if(cat==='overtime'||cat==='straordinari') return 'bg-[#d4f824]/20 text-[#d4f824] border border-[#d4f824]/40';
   return 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40';
@@ -985,12 +990,17 @@ function renderCalendarView() {
 
   if (calendarViewMode==='month') {
     const first = new Date(year,month,1), offset=(first.getDay()+6)%7, daysInMonth=new Date(year,month+1,0).getDate(), todayISO=toISODate(new Date());
+    const selectedISO = toISODate(calendarCursorDate);
     const cells=[];
-    for(let i=0;i<offset;i++) cells.push(`<div class="min-h-[84px] sm:min-h-[104px] rounded-xl bg-[#10141c]/50 border border-[#1b202b]/60 p-1.5"></div>`);
+    const mobileCells=[];
+    for(let i=0;i<offset;i++) {
+      cells.push(`<div class="min-h-[104px] rounded-xl bg-[#10141c]/50 border border-[#1b202b]/60 p-1.5"></div>`);
+      mobileCells.push(`<div class="h-12 rounded-lg bg-[#10141c]/40"></div>`);
+    }
     for(let d=1;d<=daysInMonth;d++){
-      const iso=toISODate(new Date(year,month,d)), isToday=iso===todayISO;
+      const iso=toISODate(new Date(year,month,d)), isToday=iso===todayISO, isSel=iso===selectedISO;
       const ds=state.shifts.filter(s=>s.date===iso), da=getAbsencesForDate(iso);
-      cells.push(`<div onclick="openShiftModal(null,'${iso}')" class="min-h-[84px] sm:min-h-[104px] rounded-xl bg-[#111620] hover:bg-[#161c28] border ${isToday?'border-[#d4f824]':'border-[#222938]'} p-1.5 sm:p-2 cursor-pointer flex flex-col justify-between transition-colors">
+      cells.push(`<div onclick="openShiftModal(null,'${iso}')" class="min-h-[104px] rounded-xl bg-[#111620] hover:bg-[#161c28] border ${isToday?'border-[#d4f824]':'border-[#222938]'} p-2 cursor-pointer flex flex-col justify-between transition-colors">
         <div class="flex items-center justify-between"><span class="text-xs font-semibold ${isToday?'text-[#d4f824]':'text-slate-300'}">${d}</span>${(ds.length+da.length)>0?`<span class="text-[10px] text-[#8892a4]">${ds.length+da.length}</span>`:''}</div>
         <div class="space-y-1 mt-1 overflow-hidden">
           ${ds.slice(0,2).map(s=>{const st=getShiftType(s.typeId);return`<div onclick="event.stopPropagation();openShiftModal('${s.id}')" class="px-1.5 py-0.5 rounded text-[10px] font-semibold truncate text-[#0d0f14]" style="background:${s.color||st.color}">${s.start?s.start+' ':''}${escapeHTML(st.label)}</div>`}).join('')}
@@ -998,8 +1008,27 @@ function renderCalendarView() {
           ${(ds.length+da.length)>4?`<div class="text-[10px] text-[#8892a4]">+${(ds.length+da.length)-4}</div>`:''}
         </div>
       </div>`);
+      mobileCells.push(`<button type="button" onclick="calendarCursorDate=new Date(${year},${month},${d});renderCurrentView();" class="h-12 rounded-xl flex flex-col items-center justify-center gap-1 border transition-colors ${isSel?'bg-[#1c2333] border-[#d4f824]':(isToday?'bg-[#111620] border-[#d4f824]/50':'bg-[#111620] border-[#222938]')}">
+        <span class="text-xs font-bold ${isToday||isSel?'text-[#d4f824]':'text-slate-200'}">${d}</span>
+        <div class="flex items-center gap-0.5 h-1.5">
+          ${ds.slice(0,3).map(s=>`<span class="w-1.5 h-1.5 rounded-full" style="background:${s.color||getShiftType(s.typeId).color}"></span>`).join('')}
+          ${da.slice(0,2).map(()=>`<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>`).join('')}
+        </div>
+      </button>`);
     }
-    gridHtml=`<div class="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2 text-center">${dayHeaders.map(h=>`<div class="text-[10px] sm:text-[11px] font-semibold tracking-wider text-[#8892a4] py-1">${h}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1.5 sm:gap-2">${cells.join('')}</div>`;
+    const selShifts=state.shifts.filter(s=>s.date===selectedISO), selAbs=getAbsencesForDate(selectedISO);
+    const mobileDayDetail = `<div class="sm:hidden mt-4 pt-4 border-t border-[#232936] space-y-2.5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-white uppercase">${formatDateIT(selectedISO)}</span>
+        <button onclick="openShiftModal(null,'${selectedISO}')" class="lime-btn px-3 py-1.5 rounded-lg text-xs inline-flex items-center gap-1"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span>${t('addShiftCta')}</span></button>
+      </div>
+      ${selShifts.length===0&&selAbs.length===0?`<div class="dashed-empty py-5 text-center text-xs text-[#8892a4]">${t('noShiftDay')}</div>`:`<div class="space-y-2">
+        ${selShifts.map(s=>{const st=getShiftType(s.typeId);return`<div onclick="openShiftModal('${s.id}')" class="p-3 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between"><div class="flex items-center gap-2.5 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${s.color||st.color}"></span><div class="truncate"><div class="text-xs font-bold text-white truncate">${escapeHTML(st.label)}</div><div class="text-[11px] text-[#8892a4]">${s.start||'—'} – ${s.end||'—'}</div></div></div><span class="text-xs font-semibold text-[#d4f824]">${formatHours(calcShiftDurationHours(s.start,s.end))}</span></div>`;}).join('')}
+        ${selAbs.map(ab=>`<div onclick="navigate('assenze')" class="p-3 rounded-xl bg-[#11151d] border border-[#232936] flex items-center justify-between"><span class="px-2 py-0.5 rounded text-xs font-semibold ${getAbsenceBadgeStyle(ab.category)}">${escapeHTML(ab.type)}</span><span class="text-xs text-[#8892a4]">${ab.days||1}g</span></div>`).join('')}
+      </div>`}
+    </div>`;
+    gridHtml=`<div class="hidden sm:block"><div class="grid grid-cols-7 gap-2 mb-2 text-center">${dayHeaders.map(h=>`<div class="text-[11px] font-semibold tracking-wider text-[#8892a4] py-1">${h}</div>`).join('')}</div><div class="grid grid-cols-7 gap-2">${cells.join('')}</div></div>
+    <div class="sm:hidden"><div class="grid grid-cols-7 gap-1 mb-1.5 text-center">${dayHeaders.map(h=>`<div class="text-[10px] font-semibold text-[#8892a4] py-0.5">${h.slice(0,1)}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">${mobileCells.join('')}</div>${mobileDayDetail}</div>`;
   } else if (calendarViewMode==='week') {
     const curr=new Date(calendarCursorDate), diff=(curr.getDay()+6)%7, mon=new Date(curr.getFullYear(),curr.getMonth(),curr.getDate()-diff), todayISO=toISODate(new Date());
     gridHtml=`<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">${Array.from({length:7},(_,i)=>{
@@ -1175,7 +1204,7 @@ function renderImportView() {
       <div class="text-xs text-[#8892a4]">${t('dupNotice')}</div>
       <div class="pt-3 border-t border-[#232936]">
         <label class="block text-xs font-semibold text-[#9aa4b6] mb-1.5">${t('pasteTextLabel')}</label>
-        <textarea id="import-raw-text" rows="3" placeholder="Es: 25/11/2026 Mattina 08:00-14:00 Capasso" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-xs text-white"></textarea>
+        <textarea id="import-raw-text" rows="3" placeholder="Es: 25/11/2026 Mattina 08:00-14:00 Mario Rossi" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-xs text-white"></textarea>
         <div class="flex items-center justify-end mt-2">
           <button onclick="parseManualTextInput()" class="px-3.5 py-1.5 rounded-xl bg-[#1a202c] hover:bg-[#242c3d] border border-[#2d3748] text-xs font-semibold text-[#d4f824]">${t('analyzeTextBtn')}</button>
         </div>
@@ -1283,7 +1312,14 @@ async function processUploadedFile(file) {
     const isPdf=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
     if(isPdf) {
       if(!window.pdfjsLib) throw new Error('PDF.js non disponibile.');
-      const ab=await file.arrayBuffer(), pdf=await pdfjsLib.getDocument({data:ab}).promise, pages=[];
+      const ab=await file.arrayBuffer();
+      let pdf;
+      try {
+        pdf = await pdfjsLib.getDocument(location.protocol === 'file:' ? { data: ab, disableWorker: true } : { data: ab }).promise;
+      } catch (_workerErr) {
+        pdf = await pdfjsLib.getDocument({ data: ab, disableWorker: true }).promise;
+      }
+      const pages=[];
       for(let p=1;p<=pdf.numPages;p++) {
         const page=await pdf.getPage(p), content=await page.getTextContent();
         const rawItems=content.items.map(it=>({str:String(it.str||'').trim(),x:Math.round(it.transform[4]),y:Math.round(it.transform[5]),w:Math.round(it.width||0)})).filter(it=>it.str.length>0);
@@ -1517,7 +1553,7 @@ function matchTargetNameScore(line, targetName) {
   if (toks.every(tok => tokenFuzzyMatch(lineWords, tok))) return 100;
 
   if (toks.length >= 2) {
-    // Try surname/longest token + initial (e.g. "Orlando Capasso" -> "Capasso O." or "O. Capasso")
+    // Try surname/longest token + initial (e.g. "Mario Rossi" -> "Rossi M." or "M. Rossi")
     const sorted = [...toks].sort((a, b) => b.length - a.length);
     const primary = sorted[0];
     const secondary = sorted[1];
@@ -1560,11 +1596,17 @@ function parseTimeRangeFromText(seg) {
 }
 function classifySegmentDetails(seg) {
   const{start,end}=parseTimeRangeFromText(seg); const low=seg.toLowerCase();
-  let kind='shift',typeId='other',absenceCategory='licenza';
+  let kind='shift',typeId='other',absenceCategory='licenza_ordinaria';
   if(/\b(l\.?\s*937|r\.?\s*937|937|legge\s*937)\b/i.test(low)){kind='absence';absenceCategory='riposo_937';}
   else if(/\b(malatt\w*|infortun\w*|mal\.?|ml|mutua)\b/i.test(low)){kind='absence';absenceCategory='malattia';}
-  else if(/\b(ferie|licenz\w*|conged\w*|lic\.?|lo|ls|fe|fer)\b/i.test(low)){kind='absence';absenceCategory='licenza';}
-  else if(/\b(ripos\w*|recuper\w*|permess\w*|rol|libero|off|rip\.?|rc|rs|smont\w*|sm)\b/i.test(low)){kind='absence';absenceCategory='riposo';}
+  else if(/\b(lic\.?\s*str\w*|licenza\s*straordin\w*|ls)\b/i.test(low)){
+    kind='absence';
+    if(/universit/i.test(low)) absenceCategory='licenza_straordinaria_uni';
+    else if(/militar/i.test(low)) absenceCategory='licenza_straordinaria_mil';
+    else absenceCategory='licenza_straordinaria';
+  }
+  else if(/\b(ferie|licenz\w*|conged\w*|lic\.?|lo|fe|fer)\b/i.test(low)){kind='absence';absenceCategory='licenza_ordinaria';}
+  else if(/\b(ripos\w*|recuper\w*|permess\w*|rol|libero|off|rip\.?|rc|rs|smont\w*|sm)\b/i.test(low)){typeId='rest';}
   else if(/\b(straordin\w*|str\.?)\b/i.test(low)){typeId='overtime';}
   else if(/\b(mattin\w*|matt\.?|mat\.?|m\d{0,2})\b/i.test(low)) typeId='morning';
   else if(/\b(pomerig\w*|pom\.?|p\d{0,2})\b/i.test(low)) typeId='afternoon';
@@ -1779,9 +1821,11 @@ function renderImportPreviewList() {
       <div><label class="block text-[10px] text-[#8892a4] mb-0.5">Tipo</label>
         <select onchange="updatePreviewRowType('${r.tempId}',this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#0d0f14] border border-[#232936] text-xs text-white">
           ${state.shiftTypes.map(st=>`<option value="shift:${st.id}" ${r.kind==='shift'&&r.typeId===st.id?'selected':''}>${escapeHTML(st.label)}</option>`).join('')}
-          <option value="absence:licenza" ${r.kind==='absence'&&(r.absenceCategory==='licenza'||r.absenceCategory==='ferie')?'selected':''}>Assenza: Licenza</option>
-          <option value="absence:riposo" ${r.kind==='absence'&&(r.absenceCategory==='riposo'||r.absenceCategory==='permesso')?'selected':''}>Assenza: Riposo</option>
+          <option value="absence:licenza_ordinaria" ${r.kind==='absence'&&(r.absenceCategory==='licenza_ordinaria'||r.absenceCategory==='licenza'||r.absenceCategory==='ferie')?'selected':''}>Assenza: Licenza ordinaria</option>
           <option value="absence:riposo_937" ${r.kind==='absence'&&r.absenceCategory==='riposo_937'?'selected':''}>Assenza: Riposo Legge 937</option>
+          <option value="absence:licenza_straordinaria" ${r.kind==='absence'&&r.absenceCategory==='licenza_straordinaria'?'selected':''}>Assenza: Licenza straordinaria</option>
+          <option value="absence:licenza_straordinaria_uni" ${r.kind==='absence'&&r.absenceCategory==='licenza_straordinaria_uni'?'selected':''}>Assenza: Lic. straord. esami universitari</option>
+          <option value="absence:licenza_straordinaria_mil" ${r.kind==='absence'&&r.absenceCategory==='licenza_straordinaria_mil'?'selected':''}>Assenza: Lic. straord. esami militari</option>
           <option value="absence:malattia" ${r.kind==='absence'&&r.absenceCategory==='malattia'?'selected':''}>Assenza: Malattia</option>
           <option value="absence:straordinari" ${r.kind==='absence'&&r.absenceCategory==='straordinari'?'selected':''}>Straordinari</option>
         </select>
@@ -1800,8 +1844,8 @@ function confirmImportedRows(){
   let as=0,ab=0;
   sel.forEach(r=>{
     if(r.kind==='absence'){
-      const catMap={ferie:'licenza',leave:'licenza',permesso:'riposo',permit:'riposo',sick:'malattia',overtime:'straordinari'};
-      const mappedCat=catMap[r.absenceCategory]||r.absenceCategory||'licenza';
+      const catMap={ferie:'licenza_ordinaria',leave:'licenza_ordinaria',licenza:'licenza_ordinaria',permesso:'riposo',permit:'riposo',sick:'malattia',overtime:'straordinari'};
+      const mappedCat=catMap[r.absenceCategory]||r.absenceCategory||'licenza_ordinaria';
       state.absences.push({id:'abs_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),category:mappedCat,type:getAbsenceCategoryLabel(mappedCat),startDate:r.date,endDate:r.date,days:1,hours:0,notes:r.note||'Importato'});
       ab++;
     } else {
@@ -1819,12 +1863,24 @@ function inspectSavedDoc(docId){
 }
 
 // ============================================================
-// ABSENCES & LEAVE BALANCE
+// ABSENCES & LEAVE BALANCE (ORDINARIA + 937 SEPARATE)
 // ============================================================
 function getLeaveBalanceStats(year = new Date().getFullYear()) {
-  const total = Number(state.leaveAllowanceDays ?? 28);
+  const total = Number(state.leaveAllowanceDays ?? 0);
+  // ONLY licenza_ordinaria (and legacy licenza/leave) deducts from Licenza ordinaria!
+  // Licenze straordinarie NEVER touch Licenza ordinaria.
   const used = state.absences
-    .filter(a => a.startDate?.startsWith(String(year)) && (a.category === 'licenza' || a.category === 'leave'))
+    .filter(a => a.startDate?.startsWith(String(year)) && (a.category === 'licenza_ordinaria' || a.category === 'licenza' || a.category === 'leave'))
+    .reduce((s, a) => s + (Number(a.days) || 1), 0);
+  const remaining = Math.round((total - used) * 10) / 10;
+  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+  return { total, used, remaining, pct };
+}
+
+function getLaw937BalanceStats(year = new Date().getFullYear()) {
+  const total = Number(state.law937AllowanceDays ?? 0);
+  const used = state.absences
+    .filter(a => a.startDate?.startsWith(String(year)) && a.category === 'riposo_937')
     .reduce((s, a) => s + (Number(a.days) || 1), 0);
   const remaining = Math.round((total - used) * 10) / 10;
   const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
@@ -1833,9 +1889,12 @@ function getLeaveBalanceStats(year = new Date().getFullYear()) {
 
 function getAbsenceCategoryLabel(cat) {
   const map = {
-    licenza: 'Licenza', leave: 'Licenza',
-    riposo: 'Riposo', permit: 'Riposo',
+    licenza_ordinaria: 'Licenza ordinaria', licenza: 'Licenza ordinaria', leave: 'Licenza ordinaria',
     riposo_937: 'Riposo Legge 937',
+    licenza_straordinaria: 'Licenza straordinaria',
+    licenza_straordinaria_uni: 'Lic. straord. esami universitari',
+    licenza_straordinaria_mil: 'Lic. straord. esami militari',
+    riposo: 'Riposo', permit: 'Riposo',
     malattia: 'Malattia', sick: 'Malattia',
     straordinari: 'Straordinari', overtime: 'Straordinari',
   };
@@ -1846,55 +1905,88 @@ function renderAbsencesView() {
   const yr = new Date().getFullYear();
   const ya = state.absences.filter(a => a.startDate?.startsWith(String(yr)));
   const leaveStats = getLeaveBalanceStats(yr);
-  const riposoDays = ya.filter(a => a.category === 'riposo' || a.category === 'permit').reduce((s, a) => s + (Number(a.days) || 1), 0);
-  const riposo937Days = ya.filter(a => a.category === 'riposo_937').reduce((s, a) => s + (Number(a.days) || 1), 0);
+  const law937Stats = getLaw937BalanceStats(yr);
+  const extraDays = ya.filter(a => a.category === 'licenza_straordinaria').reduce((s, a) => s + (Number(a.days) || 1), 0);
+  const extraUniDays = ya.filter(a => a.category === 'licenza_straordinaria_uni').reduce((s, a) => s + (Number(a.days) || 1), 0);
+  const extraMilDays = ya.filter(a => a.category === 'licenza_straordinaria_mil').reduce((s, a) => s + (Number(a.days) || 1), 0);
   const sickDays = ya.filter(a => a.category === 'malattia' || a.category === 'sick').reduce((s, a) => s + (Number(a.days) || 1), 0);
   const overtimeHrs = ya.filter(a => a.category === 'straordinari' || a.category === 'overtime').reduce((s, a) => s + (Number(a.hours) || 0), 0);
 
   return `<div class="space-y-5">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div><div class="text-[11px] font-semibold tracking-wider text-[#8892a4] uppercase">${t('absEyebrow')} · ${yr}</div><h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">${t('absTitle')}</h1></div>
-      <div class="flex items-center gap-2 self-start sm:self-auto">
-        <button onclick="openLeaveAllowanceModal()" class="px-3.5 py-2.5 rounded-xl bg-[#151921] hover:bg-[#1c222d] border border-[#232936] text-xs sm:text-sm font-semibold text-white inline-flex items-center gap-1.5"><i data-lucide="sliders" class="w-4 h-4 text-[#d4f824]"></i><span>Giorni licenza (${leaveStats.total})</span></button>
+      <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        <button onclick="openLeaveAllowanceModal()" class="px-3.5 py-2.5 rounded-xl bg-[#151921] hover:bg-[#1c222d] border border-[#232936] text-xs sm:text-sm font-semibold text-white inline-flex items-center gap-1.5"><i data-lucide="sliders" class="w-4 h-4 text-[#d4f824]"></i><span>Imposta giorni spettanti</span></button>
         <button onclick="openAbsenceModal()" class="lime-btn px-4 py-2.5 rounded-xl text-xs sm:text-sm inline-flex items-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i><span>${t('newAbsenceBtn')}</span></button>
       </div>
     </div>
 
-    <!-- DETRAZIONE LICENZA -->
-    <div class="saas-card p-4 sm:p-5 space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">CONTEGGIO E DETRAZIONE LICENZA (${yr})</div>
-          <h2 class="text-base font-bold text-white mt-0.5">Giorni di licenza disponibili</h2>
+    <!-- DETRAZIONE SEPARATA: LICENZA ORDINARIA & RIPOSO LEGGE 937 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="saas-card p-4 sm:p-5 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="text-[10px] font-semibold tracking-wider text-emerald-400 uppercase">DETRAZIONE LICENZA ORDINARIA (${yr})</div>
+            <h2 class="text-base font-bold text-white mt-0.5">Licenza ordinaria</h2>
+          </div>
+          <button onclick="openLeaveAllowanceModal()" class="text-xs text-[#d4f824] hover:underline font-semibold">Imposta giorni</button>
         </div>
-        <button onclick="openLeaveAllowanceModal()" class="text-xs text-[#d4f824] hover:underline font-semibold">Imposta giorni totali</button>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
+            <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Assegnati</div>
+            <div class="text-lg sm:text-xl font-bold text-white mt-1">${leaveStats.total} gg</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
+            <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Fruiti</div>
+            <div class="text-lg sm:text-xl font-bold text-amber-300 mt-1">-${leaveStats.used} gg</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
+            <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Rimanenti</div>
+            <div class="text-lg sm:text-xl font-bold mt-1 ${leaveStats.remaining > 0 ? 'text-[#d4f824]' : 'text-rose-400'}">${leaveStats.remaining} gg</div>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <div class="flex justify-between text-[11px] text-[#8892a4]"><span>Solo la Licenza ordinaria scala da questo saldo</span><span>${leaveStats.pct}%</span></div>
+          <div class="w-full h-2 rounded-full bg-[#232936] overflow-hidden"><div class="h-full rounded-full ${leaveStats.remaining > 0 ? 'bg-[#d4f824]' : 'bg-rose-500'}" style="width:${leaveStats.pct}%"></div></div>
+        </div>
       </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
-          <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Assegnati</div>
-          <div class="text-xl font-bold text-white mt-1">${leaveStats.total} gg</div>
+
+      <div class="saas-card p-4 sm:p-5 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="text-[10px] font-semibold tracking-wider text-violet-400 uppercase">DETRAZIONE LEGGE 937 (${yr})</div>
+            <h2 class="text-base font-bold text-white mt-0.5">Riposo Legge 937</h2>
+          </div>
+          <button onclick="openLeaveAllowanceModal()" class="text-xs text-violet-300 hover:underline font-semibold">Imposta giorni</button>
         </div>
-        <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
-          <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Fruiti (detratti)</div>
-          <div class="text-xl font-bold text-amber-300 mt-1">-${leaveStats.used} gg</div>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
+            <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Assegnati</div>
+            <div class="text-lg sm:text-xl font-bold text-white mt-1">${law937Stats.total} gg</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
+            <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Fruiti</div>
+            <div class="text-lg sm:text-xl font-bold text-amber-300 mt-1">-${law937Stats.used} gg</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
+            <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Rimanenti</div>
+            <div class="text-lg sm:text-xl font-bold mt-1 ${law937Stats.remaining > 0 ? 'text-violet-300' : 'text-rose-400'}">${law937Stats.remaining} gg</div>
+          </div>
         </div>
-        <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936]">
-          <div class="text-[10px] text-[#8892a4] uppercase font-semibold">Rimanenti</div>
-          <div class="text-xl font-bold mt-1 ${leaveStats.remaining > 0 ? 'text-[#d4f824]' : 'text-rose-400'}">${leaveStats.remaining} gg</div>
+        <div class="space-y-1">
+          <div class="flex justify-between text-[11px] text-[#8892a4]"><span>Saldo separato dalla Licenza ordinaria</span><span>${law937Stats.pct}%</span></div>
+          <div class="w-full h-2 rounded-full bg-[#232936] overflow-hidden"><div class="h-full rounded-full ${law937Stats.remaining > 0 ? 'bg-violet-400' : 'bg-rose-500'}" style="width:${law937Stats.pct}%"></div></div>
         </div>
-      </div>
-      <div class="space-y-1">
-        <div class="flex justify-between text-[11px] text-[#8892a4]"><span>Utilizzo licenza</span><span>${leaveStats.pct}%</span></div>
-        <div class="w-full h-2 rounded-full bg-[#232936] overflow-hidden"><div class="h-full rounded-full ${leaveStats.remaining > 0 ? 'bg-[#d4f824]' : 'bg-rose-500'}" style="width:${leaveStats.pct}%"></div></div>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-      <div class="saas-card p-4"><div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>LICENZA</span><i data-lucide="umbrella" class="w-3.5 h-3.5 text-emerald-400"></i></div><div class="text-2xl font-bold text-white mt-2">${leaveStats.used} gg</div><div class="text-[11px] text-[#8892a4] mt-1">${leaveStats.remaining} gg rimasti</div></div>
-      <div class="saas-card p-4"><div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>RIPOSO</span><i data-lucide="coffee" class="w-3.5 h-3.5 text-sky-400"></i></div><div class="text-2xl font-bold text-white mt-2">${riposoDays} gg</div></div>
-      <div class="saas-card p-4"><div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>RIPOSO L. 937</span><i data-lucide="shield-check" class="w-3.5 h-3.5 text-violet-400"></i></div><div class="text-2xl font-bold text-white mt-2">${riposo937Days} gg</div></div>
-      <div class="saas-card p-4"><div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>MALATTIA</span><i data-lucide="heart-pulse" class="w-3.5 h-3.5 text-rose-400"></i></div><div class="text-2xl font-bold text-white mt-2">${sickDays} gg</div></div>
-      <div class="saas-card p-4 col-span-2 lg:col-span-1"><div class="flex items-center justify-between text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase"><span>STRAORDINARI</span><i data-lucide="zap" class="w-3.5 h-3.5 text-[#d4f824]"></i></div><div class="text-2xl font-bold text-white mt-2">${formatHours(overtimeHrs)}</div></div>
+    <!-- CONTATORI LICENZE STRAORDINARIE (NON INTACCANO L'ORDINARIA), MALATTIA E STRAORDINARI -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">LIC. STRAORDINARIA</div><div class="text-2xl font-bold text-amber-300 mt-2">${extraDays} gg</div><div class="text-[10px] text-[#8892a4] mt-1">Non scala l'ordinaria</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">ESAMI UNIVERSITARI</div><div class="text-2xl font-bold text-amber-300 mt-2">${extraUniDays} gg</div><div class="text-[10px] text-[#8892a4] mt-1">Non scala l'ordinaria</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">ESAMI MILITARI</div><div class="text-2xl font-bold text-amber-300 mt-2">${extraMilDays} gg</div><div class="text-[10px] text-[#8892a4] mt-1">Non scala l'ordinaria</div></div>
+      <div class="saas-card p-4"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">MALATTIA</div><div class="text-2xl font-bold text-rose-300 mt-2">${sickDays} gg</div></div>
+      <div class="saas-card p-4 col-span-2 sm:col-span-1"><div class="text-[10px] font-semibold tracking-wider text-[#8892a4] uppercase">STRAORDINARI</div><div class="text-2xl font-bold text-[#d4f824] mt-2">${formatHours(overtimeHrs)}</div></div>
     </div>
 
     <div class="saas-card p-4 sm:p-5 space-y-3">
@@ -1918,16 +2010,19 @@ function renderAbsencesView() {
 
 function openLeaveAllowanceModal() {
   const stats = getLeaveBalanceStats();
-  openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Giorni di licenza disponibili</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
-  <p class="text-xs text-[#9aa4b6] mb-4">Imposta il totale dei giorni di licenza spettanti nell'anno. Ogni assenza registrata come <strong>Licenza</strong> verrà detratta automaticamente.</p>
+  const stats937 = getLaw937BalanceStats();
+  openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Imposta giorni spettanti</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+  <p class="text-xs text-[#9aa4b6] mb-4">Inserisci quanti giorni di <strong>Licenza ordinaria</strong> e di <strong>Riposo Legge 937</strong> hai a disposizione. I due contatori sono separati e le licenze straordinarie non intaccano la licenza ordinaria.</p>
   <form onsubmit="saveLeaveAllowanceForm(event)" class="space-y-4">
     <div>
-      <label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Totale giorni di licenza</label>
+      <label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Giorni di Licenza ordinaria spettanti</label>
       <input name="leaveAllowanceDays" type="number" min="0" max="365" step="0.5" required value="${stats.total}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" />
+      <div class="text-[11px] text-[#8892a4] mt-1">Già fruiti: ${stats.used} gg · Rimanenti: <strong class="text-[#d4f824]">${stats.remaining} gg</strong></div>
     </div>
-    <div class="p-3 rounded-xl bg-[#11151d] border border-[#232936] text-xs text-[#9aa4b6] flex justify-between">
-      <span>Già fruiti quest'anno: <strong class="text-white">${stats.used} gg</strong></span>
-      <span>Rimanenti attuali: <strong class="text-[#d4f824]">${stats.remaining} gg</strong></span>
+    <div>
+      <label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Giorni di Riposo Legge 937 spettanti</label>
+      <input name="law937AllowanceDays" type="number" min="0" max="365" step="0.5" required value="${stats937.total}" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" />
+      <div class="text-[11px] text-[#8892a4] mt-1">Già fruiti: ${stats937.used} gg · Rimanenti: <strong class="text-violet-300">${stats937.remaining} gg</strong></div>
     </div>
     <div class="flex justify-end gap-2"><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-[#1c222e] text-xs font-semibold text-slate-300">Annulla</button><button type="submit" class="lime-btn px-4 py-2 rounded-xl text-xs">Salva</button></div>
   </form>`);
@@ -1937,7 +2032,8 @@ function saveLeaveAllowanceForm(e) {
   e.preventDefault();
   const fd = new FormData(e.target);
   state.leaveAllowanceDays = Math.max(0, Number(fd.get('leaveAllowanceDays')) || 0);
-  saveState(); closeModal(); renderCurrentView(); showToast('Giorni di licenza aggiornati.');
+  state.law937AllowanceDays = Math.max(0, Number(fd.get('law937AllowanceDays')) || 0);
+  saveState(); closeModal(); renderCurrentView(); showToast('Giorni spettanti aggiornati.');
 }
 
 function updateAbsenceDaysAuto() {
@@ -1950,24 +2046,48 @@ function updateAbsenceDaysAuto() {
   if (diff >= 1) daysEl.value = diff;
 }
 
+function onAbsenceCategoryChange(val) {
+  const isOt = val === 'straordinari';
+  document.getElementById('abs-ot')?.classList.toggle('hidden', !isOt);
+  document.getElementById('abs-days')?.classList.toggle('hidden', isOt);
+  const hint = document.getElementById('abs-leave-hint');
+  if (!hint) return;
+  const stats = getLeaveBalanceStats();
+  const stats937 = getLaw937BalanceStats();
+  if (val === 'licenza_ordinaria') {
+    hint.className = 'p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-200';
+    hint.innerHTML = `Scala dalla <strong>Licenza ordinaria</strong>. Disponibili: <strong>${stats.remaining} gg</strong> su ${stats.total} gg.`;
+  } else if (val === 'riposo_937') {
+    hint.className = 'p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/25 text-xs text-violet-200';
+    hint.innerHTML = `Scala dal saldo separato <strong>Riposo Legge 937</strong>. Disponibili: <strong>${stats937.remaining} gg</strong> su ${stats937.total} gg.`;
+  } else if (val.startsWith('licenza_straordinaria')) {
+    hint.className = 'p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200';
+    hint.innerHTML = `Questa licenza straordinaria <strong>non intacca</strong> i tuoi giorni di Licenza ordinaria.`;
+  } else {
+    hint.className = 'hidden';
+  }
+}
+
 function openAbsenceModal() {
   const today=toISODate(new Date());
   const stats=getLeaveBalanceStats();
   openModal(`<div class="flex items-center justify-between mb-4"><h3 class="text-lg font-bold text-white">Nuova assenza / straordinario</h3><button onclick="closeModal()" class="text-[#8892a4] hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button></div>
   <form onsubmit="saveAbsenceForm(event)" class="space-y-3.5">
     <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Categoria</label>
-      <select id="abs-cat-select" name="category" onchange="const isOt=this.value==='straordinari';document.getElementById('abs-ot').classList.toggle('hidden',!isOt);document.getElementById('abs-days').classList.toggle('hidden',isOt);document.getElementById('abs-leave-hint').classList.toggle('hidden',this.value!=='licenza');" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white">
-        <option value="licenza">Licenza</option>
-        <option value="riposo">Riposo</option>
+      <select id="abs-cat-select" name="category" onchange="onAbsenceCategoryChange(this.value)" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white">
+        <option value="licenza_ordinaria">Licenza ordinaria</option>
         <option value="riposo_937">Riposo Legge 937</option>
+        <option value="licenza_straordinaria">Licenza straordinaria</option>
+        <option value="licenza_straordinaria_uni">Licenza straordinaria per esami universitari</option>
+        <option value="licenza_straordinaria_mil">Licenza straordinaria per esami militari</option>
         <option value="malattia">Malattia</option>
         <option value="straordinari">Straordinari</option>
       </select>
     </div>
     <div id="abs-leave-hint" class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-200">
-      Licenza disponibile: <strong>${stats.remaining} gg</strong> su ${stats.total} gg (verrà detratta automaticamente).
+      Scala dalla <strong>Licenza ordinaria</strong>. Disponibili: <strong>${stats.remaining} gg</strong> su ${stats.total} gg.
     </div>
-    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Descrizione (opzionale se uguale alla categoria)</label><input name="type" type="text" placeholder="Es. Licenza ordinaria, Riposo compensativo, L. 937..." class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
+    <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Descrizione (opzionale se uguale alla categoria)</label><input name="type" type="text" placeholder="Es. Licenza ordinaria, Esame universitario, L. 937..." class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
     <div class="grid grid-cols-2 gap-3">
       <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Inizio</label><input id="abs-start" name="startDate" type="date" required value="${today}" onchange="updateAbsenceDaysAuto()" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
       <div><label class="block text-xs font-semibold text-[#9aa4b6] mb-1">Fine</label><input id="abs-end" name="endDate" type="date" value="${today}" onchange="updateAbsenceDaysAuto()" class="w-full px-3 py-2 rounded-xl bg-[#0d0f14] border border-[#232936] text-sm text-white" /></div>
@@ -1994,7 +2114,7 @@ function saveAbsenceForm(e){
     notes:(fd.get('notes')||'').trim()
   });
   saveState();closeModal();renderCurrentView();
-  showToast(cat==='licenza'?'Licenza registrata e detratta dal totale.':'Registrazione salvata.');
+  showToast(cat==='licenza_ordinaria'?'Licenza ordinaria detratta dal saldo.':(cat==='riposo_937'?'Riposo L. 937 detratto dal saldo 937.':'Registrazione salvata.'));
 }
 function deleteAbsence(id){state.absences=state.absences.filter(a=>a.id!==id);saveState();renderCurrentView();showToast('Voce eliminata.');}
 
