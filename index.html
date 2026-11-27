@@ -1560,7 +1560,7 @@ async function parseManualTextInput() {
 
 async function analyzeWithExternalAI({extractedText,imageBase64,imageMimeType,targetName}) {
   const cfg=state.aiConfig||{}; const yr=new Date().getFullYear(), mo=String(new Date().getMonth()+1).padStart(2,'0');
-  const prompt=`Sei un assistente specializzato nell'estrazione di prospetti turni lavorativi italiani.\nAnalizza il documento.\n${targetName?`FILTRO: Estrai SOLO i turni di "${targetName}".`:''}\nAnno default: ${yr}, mese default: ${mo}.\nRestituisci SOLO un array JSON valido (senza markdown), ogni elemento:\n{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","kind":"shift|absence","typeId":"morning|afternoon|night|rest|overtime|other","absenceCategory":"licenza|riposo|riposo_937|malattia|straordinari","note":"..."}\n\nTesto:\n${extractedText||'(nessun testo, leggi dall\'immagine)'}`;
+  const prompt=`Sei un assistente specializzato nell'estrazione di prospetti turni e Ordini di Servizio italiani (anche multi-pagina con tabella ASSENZE, codici R.S., LO, L.P., RL, 937 e fasce orarie a sinistra del nominativo come 00/06, 06/12, 12/18, 18/24, 08/14, 14/20).\nAnalizza il documento.\n${targetName?`FILTRO: Estrai SOLO i turni e le assenze di "${targetName}".`:''}\nAnno default: ${yr}, mese default: ${mo}.\nRestituisci SOLO un array JSON valido (senza markdown), ogni elemento:\n{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","kind":"shift|absence","typeId":"morning|afternoon|night|rest|overtime|other","absenceCategory":"licenza_ordinaria|riposo_937|licenza_straordinaria|licenza_straordinaria_uni|licenza_straordinaria_mil|malattia|straordinari","note":"..."}\n\nTesto:\n${extractedText||'(nessun testo, leggi dall\'immagine)'}`;
   let raw='';
   if(cfg.provider==='gemini') {
     const model=cfg.model||'gemini-2.5-flash';
@@ -1679,6 +1679,19 @@ function matchTargetNameScore(line, targetName) {
 function lineMatchesTargetName(line, targetName) {
   return matchTargetNameScore(line, targetName) >= 60;
 }
+function parseItalianWrittenDate(txt) {
+  if (!txt) return '';
+  const mn = {
+    gennaio:1, febbraio:2, marzo:3, aprile:4, maggio:5, giugno:6,
+    luglio:7, agosto:8, settembre:9, ottobre:10, novembre:11, dicembre:12,
+    gen:1, feb:2, mar:3, apr:4, mag:5, giu:6, lug:7, ago:8, set:9, ott:10, nov:11, dic:12
+  };
+  const m = String(txt).toLowerCase().match(/\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\s+(20\d{2})\b/i);
+  if (!m) return '';
+  const monthNum = mn[m[2].toLowerCase()];
+  if (!monthNum) return '';
+  return resolveDateFromTokens(m[1], monthNum, m[3], Number(m[3]), monthNum);
+}
 function inferYearMonthFromContext(txt) {
   const now=new Date(); let year=now.getFullYear(), month=now.getMonth()+1;
   const ym=txt.match(/\b(20\d{2})\b/); if(ym) year=Number(ym[1]);
@@ -1709,14 +1722,14 @@ function classifySegmentDetails(seg) {
   let kind='shift',typeId='other',absenceCategory='licenza_ordinaria';
   if(/\b(l\.?\s*937|r\.?\s*937|937|legge\s*937)\b/i.test(low)){kind='absence';absenceCategory='riposo_937';}
   else if(/\b(malatt\w*|infortun\w*|mal\.?|ml|mutua)\b/i.test(low)){kind='absence';absenceCategory='malattia';}
-  else if(/\b(lic\.?\s*str\w*|licenza\s*straordin\w*|ls)\b/i.test(low)){
+  else if(/\b(l\.?\s*p\.?|romc|ste|stf|pfg|pag|ds|lic\.?\s*str\w*|licenza\s*straordin\w*|ls)\b/i.test(low)){
     kind='absence';
     if(/universit/i.test(low)) absenceCategory='licenza_straordinaria_uni';
     else if(/militar/i.test(low)) absenceCategory='licenza_straordinaria_mil';
     else absenceCategory='licenza_straordinaria';
   }
-  else if(/\b(ferie|licenz\w*|conged\w*|lic\.?|lo|fe|fer)\b/i.test(low)){kind='absence';absenceCategory='licenza_ordinaria';}
-  else if(/\b(ripos\w*|recuper\w*|permess\w*|rol|libero|off|rip\.?|rc|rs|smont\w*|sm)\b/i.test(low)){typeId='rest';}
+  else if(/\b(ferie|licenz\w*|conged\w*|lic\.?|l\.?\s*o\.?|fe|fer)\b/i.test(low)){kind='absence';absenceCategory='licenza_ordinaria';}
+  else if(/\b(r\.?\s*s\.?|r\.?\s*l\.?|ripos\w*|recuper\w*|permess\w*|rol|libero|off|rip\.?|rc|smont\w*|sm)\b/i.test(low)){typeId='rest';}
   else if(/\b(straordin\w*|str\.?)\b/i.test(low)){typeId='overtime';}
   else if(/\b(mattin\w*|matt\.?|mat\.?|m\d{0,2})\b/i.test(low)) typeId='morning';
   else if(/\b(pomerig\w*|pom\.?|p\d{0,2})\b/i.test(low)) typeId='afternoon';
@@ -1777,6 +1790,88 @@ function localAITurnParser(structuredLines,rawText,targetName='') {
     const dup=state.shifts.some(s=>s.date===isoDate&&(s.start||'')===start&&(s.end||'')===end)||rows.some(r=>r.kind===kind&&r.date===isoDate&&(r.start||'')===start&&(r.end||'')===end);
     rows.push({tempId:'row_'+rows.length+'_'+Math.random().toString(36).slice(2,6),kind,date:isoDate,start,end,typeId,absenceCategory,note:segText.replace(/\s+/g,' ').trim().slice(0,160),duplicate:dup,selected:!dup});
   };
+
+  // Strategy D: Daily Order ("Ordine di Servizio") — Page header date (e.g. "30 novembre 2026") + Time to the LEFT of name + ASSENZE table
+  const pageDateMap = {};
+  structuredLines.forEach(ln => {
+    const p = ln.page || 1;
+    if (pageDateMap[p]) return;
+    const wd = parseItalianWrittenDate(ln.text);
+    if (wd) { pageDateMap[p] = wd; return; }
+    const dm = ln.text.match(/\b(\d{1,2})\s*[\/\-]\s*(\d{1,2})\s*[\/\-]\s*(20\d{2})\b/);
+    if (dm && !/malpensa|roma|milano|data\s*stampa/i.test(ln.text)) {
+      const iso = resolveDateFromTokens(dm[1], dm[2], dm[3], ctxYear, ctxMonth);
+      if (iso) pageDateMap[p] = iso;
+    }
+  });
+  // Inherit page date from previous page if page 2 didn't repeat header
+  const pageNums = [...new Set(structuredLines.map(l => l.page || 1))].sort((a, b) => a - b);
+  let lastPageDate = '';
+  pageNums.forEach(p => {
+    if (pageDateMap[p]) lastPageDate = pageDateMap[p];
+    else if (lastPageDate) pageDateMap[p] = lastPageDate;
+  });
+
+  if (Object.keys(pageDateMap).length > 0 && ct) {
+    const absCodeRx = /^(R\.?S\.?|R\.?L\.?|L\.?O\.?|L\.?P\.?|L\.?S\.?|ROMC|STE|STF|PFG|PAG|DS|MAL|ML|937|L\.?937)$/i;
+    pageNums.forEach(p => {
+      const pDate = pageDateMap[p];
+      if (!pDate) return;
+      const pLines = structuredLines.filter(l => (l.page || 1) === p);
+      let inAssenze = false;
+      let activeAbsCode = '';
+      let activeSectionTitle = '';
+
+      pLines.forEach((ln, idx) => {
+        if (/\bASSENZE\b/i.test(ln.text)) { inAssenze = true; activeAbsCode = ''; return; }
+        if (/\bPERNOTTI\b/i.test(ln.text)) { inAssenze = false; return; }
+
+        if (!inAssenze && !parseTimeRangeFromText(ln.text).start && !lineMatchesTargetName(ln.text, ct)) {
+          if (/[a-zà-ù]{4,}/i.test(ln.text)) activeSectionTitle = ln.text.replace(/\s*\|\s*/g, ' ').trim().slice(0, 80);
+        }
+
+        if (inAssenze && ln.cells?.length) {
+          const leftCodeCell = ln.cells.find(c => absCodeRx.test(c.str.trim()));
+          if (leftCodeCell) activeAbsCode = leftCodeCell.str.trim();
+        }
+
+        if (!lineMatchesTargetName(ln.text, ct)) return;
+
+        if (inAssenze) {
+          const code = activeAbsCode || 'R.S.';
+          addRow(pDate, `${code} (${ln.text.replace(/\s*\|\s*/g, ' ').trim()})`);
+          return;
+        }
+
+        // Shift row: find the cell matching targetName and the closest time-range to its LEFT (same row or 1-2 lines above)
+        const targetCells = (ln.cells || []).filter(c => lineMatchesTargetName(c.str, ct));
+        const targetX = targetCells.length ? targetCells[0].x : 9999;
+        let bestTime = null;
+        let bestTimeX = -1;
+
+        for (let back = 0; back <= 2; back++) {
+          const candLn = pLines[idx - back];
+          if (!candLn || Math.abs(candLn.y - ln.y) > 32) break;
+          (candLn.cells || []).forEach(c => {
+            const tr = parseTimeRangeFromText(c.str);
+            if (tr.start && c.x <= targetX + 12 && c.x >= bestTimeX) {
+              bestTimeX = c.x;
+              bestTime = c.str;
+            }
+          });
+          if (bestTime) break;
+        }
+
+        if (bestTime) {
+          addRow(pDate, `${bestTime}${activeSectionTitle ? ' · ' + activeSectionTitle : ''}`);
+        } else {
+          const trLine = parseTimeRangeFromText(ln.text);
+          if (trLine.start) addRow(pDate, ln.text);
+        }
+      });
+    });
+    if (rows.length > 0) return rows;
+  }
 
   // Strategy A: Employee name in column header (X), days down rows (Y)
   if(ct){
