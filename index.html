@@ -1248,7 +1248,7 @@ function tesseractDataToStructuredLines(ocrData, pageNum = 1) {
         const mergedCells = [];
         l.items.forEach(cell => {
           const prev = mergedCells[mergedCells.length - 1];
-          if (prev && (cell.x - (prev.x + prev.w)) <= 14) {
+          if (prev && (cell.x - (prev.x + prev.w)) <= 5) {
             prev.str = `${prev.str} ${cell.str}`.trim();
             prev.w = (cell.x + cell.w) - prev.x;
           } else {
@@ -1295,7 +1295,7 @@ async function processUploadedFile(file) {
           const mergedCells=[];
           l.items.forEach(cell=>{
             const prev=mergedCells[mergedCells.length-1];
-            if(prev&&(cell.x-(prev.x+prev.w))<=12){prev.str=`${prev.str} ${cell.str}`.trim();prev.w=(cell.x+cell.w)-prev.x;}
+            if(prev&&(cell.x-(prev.x+prev.w))<=4){prev.str=`${prev.str} ${cell.str}`.trim();prev.w=(cell.x+cell.w)-prev.x;}
             else{mergedCells.push({...cell});}
           });
           return{page:p,y:l.y-(p-1)*5000,rawY:l.y,text:mergedCells.map(c=>c.str).join(' | '),cells:mergedCells};
@@ -1542,15 +1542,19 @@ function inferYearMonthFromContext(txt) {
   return {year,month};
 }
 function parseTimeRangeFromText(seg) {
-  const r=seg.match(/\b(\d{1,2}[:.]\d{2})\s*(?:[-–—\/→]|alle?|a|fino\s+alle?)\s*(\d{1,2}[:.]\d{2})\b/i);
-  if(r) { const n=s=>{ const c=s.replace('.',':'); const[h,m]=c.split(':'); return`${String(Number(h)).padStart(2,'0')}:${m}`; }; return{start:n(r[1]),end:n(r[2])}; }
+  const normHour = h => (Number(h) === 24 ? '00' : String(Number(h)).padStart(2, '0'));
+  const r=seg.match(/\b(\d{1,2}[:.,]\d{2})\s*(?:[-–—\/→]|alle?|a|fino\s+alle?)\s*(\d{1,2}[:.,]\d{2})\b/i);
+  if(r) { const n=s=>{ const c=s.replace(/[.,]/g,':'); const[h,m]=c.split(':'); return`${normHour(h)}:${m}`; }; return{start:n(r[1]),end:n(r[2])}; }
   const hOnly=seg.match(/\b(?:ore|h\.?)?\s*([012]?\d)\s*[-–—\/→]\s*([012]?\d)\b/i);
-  if(hOnly){const h1=Number(hOnly[1]),h2=Number(hOnly[2]);if(h1>=0&&h1<=23&&h2>=0&&h2<=23&&h1!==h2)return{start:`${String(h1).padStart(2,'0')}:00`,end:`${String(h2).padStart(2,'0')}:00`};}
+  if(hOnly){
+    const h1=Number(hOnly[1]),h2=Number(hOnly[2]);
+    if(h1>=0&&h1<=23&&h2>=0&&h2<=24&&h1!==h2) return{start:`${normHour(h1)}:00`,end:`${normHour(h2)}:00`};
+  }
   const comp=seg.match(/\b([012]\d)([0-5]\d)\s*[-–—\/]\s*([012]\d)([0-5]\d)\b/);
-  if(comp) return{start:`${comp[1]}:${comp[2]}`,end:`${comp[3]}:${comp[4]}`};
-  if(/\b(mattin\w*|matt\.?|mat\.?|m\d{0,2})\b/i.test(seg)&&!/\d{1,2}[:.]\d{2}/.test(seg)) return{start:'08:00',end:'14:00'};
-  if(/\b(pomerig\w*|pom\.?|p\d{0,2})\b/i.test(seg)&&!/\d{1,2}[:.]\d{2}/.test(seg)) return{start:'14:00',end:'20:00'};
-  if(/\b(nott\w*|not\.?|n\d{0,2})\b/i.test(seg)&&!/\d{1,2}[:.]\d{2}/.test(seg)) return{start:'22:00',end:'06:00'};
+  if(comp) return{start:`${normHour(comp[1])}:${comp[2]}`,end:`${normHour(comp[3])}:${comp[4]}`};
+  if(/\b(mattin\w*|matt\.?|mat\.?|m\d{0,2})\b/i.test(seg)&&!/\d{1,2}[:.,]\d{2}/.test(seg)) return{start:'08:00',end:'14:00'};
+  if(/\b(pomerig\w*|pom\.?|p\d{0,2})\b/i.test(seg)&&!/\d{1,2}[:.,]\d{2}/.test(seg)) return{start:'14:00',end:'20:00'};
+  if(/\b(nott\w*|not\.?|n\d{0,2})\b/i.test(seg)&&!/\d{1,2}[:.,]\d{2}/.test(seg)) return{start:'22:00',end:'06:00'};
   if(/\b(h24|24h|guardia)\b/i.test(seg)) return{start:'08:00',end:'08:00'};
   return{start:'',end:''};
 }
@@ -1704,14 +1708,14 @@ function localAITurnParser(structuredLines,rawText,targetName='') {
     if(rows.length>0) return rows;
   }
 
-  // Strategy C: line-by-line with target isolation
+  // Strategy C: line-by-line with smart distinction between dates and compact shift hours (e.g. 6/12, 14/20, 18/24)
   const expanded=[];
   structuredLines.forEach(ln=>ln.text.split(/\s+[·|]\s+/).forEach(p=>{if(p.trim())expanded.push(p.trim());}));
   if(ct&&!expanded.some(l=>lineMatchesTargetName(l,ct))) return [];
 
   let activeSection=!ct, currentDate='';
   expanded.forEach(line=>{
-    const dateRegex=/\b(\d{1,2})\s*[\/\-]\s*(\d{1,2})(?:\s*[\/\-]\s*(\d{2,4}))?\b/g;
+    const dateRegex=/\b(\d{1,2})\s*([\/\-])\s*(\d{1,2})(?:\s*[\/\-]\s*(\d{2,4}))?\b/g;
     const directMatch=ct?lineMatchesTargetName(line,ct):true;
     const wdMatch=line.match(/\b(?:lun(?:edi|\.)?|mar(?:tedi|\.)?|mer(?:coledi|\.)?|gio(?:vedi|\.)?|ven(?:erdi|\.)?|sab(?:ato|\.)?|dom(?:enica|\.)?)\s+(\d{1,2})\b/i);
     if(ct){
@@ -1719,17 +1723,27 @@ function localAITurnParser(structuredLines,rawText,targetName='') {
       else if(looksLikeAnotherPersonOrHeader(line,ct)) { activeSection=false; return; }
       else if(!activeSection) return;
     }
-    const matches=[...line.matchAll(dateRegex)];
-    if(matches.length>1){
-      matches.forEach((m,i)=>{
-        const end=i+1<matches.length?matches[i+1].index:line.length;
+    const rawMatches=[...line.matchAll(dateRegex)];
+    const dateMatches=rawMatches.filter((m,idx)=>{
+      const a=Number(m[1]), sep=m[2], b=Number(m[3]), yr=m[4];
+      if(yr) return true; // has year -> definitely a date
+      if(b<1||b>12||a<1||a>31) return false; // e.g. 14/20, 18/24, 00/06 -> time range, NOT date
+      if(sep==='-'&&a<=24&&b<=24) return false; // 6-12, 8-14, 14-20 -> time range
+      // If an earlier match on the same line already matched a date (or ctxMonth), treat e.g. 6/12 after 25/11 as time range
+      if(idx>0 && Number(rawMatches[0][3])>=1 && Number(rawMatches[0][3])<=12) return false;
+      if(currentDate && b!==ctxMonth && a>=0 && a<=23 && b<=24 && (a<b || (a>=18 && b<=8))) return false;
+      return true;
+    });
+    if(dateMatches.length>1){
+      dateMatches.forEach((m,i)=>{
+        const end=i+1<dateMatches.length?dateMatches[i+1].index:line.length;
         const seg=line.slice(m.index,end).trim();
-        const iso=resolveDateFromTokens(m[1],m[2],m[3],ctxYear,ctxMonth);
+        const iso=resolveDateFromTokens(m[1],m[3],m[4],ctxYear,ctxMonth);
         if(iso){currentDate=iso;addRow(iso,seg);}
       }); return;
     }
-    if(matches.length===1){
-      const m=matches[0], iso=resolveDateFromTokens(m[1],m[2],m[3],ctxYear,ctxMonth);
+    if(dateMatches.length===1){
+      const m=dateMatches[0], iso=resolveDateFromTokens(m[1],m[3],m[4],ctxYear,ctxMonth);
       if(iso) currentDate=iso;
       const rest=line.replace(m[0],'').trim();
       if(iso&&isShiftMeaningful(rest||line)) addRow(iso,rest||line);
