@@ -391,6 +391,8 @@ function createEmptyUserState(username) {
     shifts: [], absences: [], incomes: [], expenses: [],
     leaveAllowanceDays: 0,
     law937AllowanceDays: 0,
+    leaveAllowanceConfigured: false,
+    law937AllowanceConfigured: false,
     activities: [], importedDocs: [],
     expenseCategories: [...DEFAULT_EXPENSE_CATEGORIES],
     shortcuts: JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS)),
@@ -461,8 +463,9 @@ function loadUserState(username) {
   if (!state.expenseCategories.includes('Abbonamenti')) {
     state.expenseCategories.push('Abbonamenti');
   }
-  if (typeof state.leaveAllowanceDays !== 'number') {
+  if (typeof state.leaveAllowanceDays !== 'number' || (!state.leaveAllowanceConfigured && state.leaveAllowanceDays === 28)) {
     state.leaveAllowanceDays = 0;
+    saveState();
   }
   if (typeof state.law937AllowanceDays !== 'number') {
     state.law937AllowanceDays = 0;
@@ -1304,6 +1307,93 @@ function tesseractDataToStructuredLines(ocrData, pageNum = 1) {
   }));
 }
 
+async function extractRawTextFromPdfBytes(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const latin1 = new TextDecoder('latin1').decode(bytes);
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const rawItems = [];
+  let pageIdx = 1;
+  let match;
+
+  async function tryInflate(u8) {
+    if (typeof DecompressionStream === 'undefined') return null;
+    for (const fmt of ['deflate', 'deflate-raw']) {
+      try {
+        const ds = new DecompressionStream(fmt);
+        const writer = ds.writable.getWriter();
+        writer.write(u8);
+        writer.close();
+        const buf = await new Response(ds.readable).arrayBuffer();
+        return new TextDecoder('latin1').decode(buf);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function unescapePdfStr(s) {
+    return s.replace(/\\([()\\nrtbf])/g, (_, c) => ({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '(': '(', ')': ')', '\\': '\\' }[c] || c))
+            .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+  }
+
+  while ((match = streamRegex.exec(latin1)) !== null) {
+    const startOffset = match.index + match[0].indexOf(match[1]);
+    const endOffset = startOffset + match[1].length;
+    const chunk = bytes.slice(startOffset, endOffset);
+    let content = await tryInflate(chunk);
+    if (!content) content = match[1];
+    if (!content.includes('BT') && !content.includes('Tj') && !content.includes('TJ')) continue;
+
+    let curX = 0, curY = 0;
+    const btBlocks = content.match(/BT[\s\S]*?ET/g) || [content];
+    btBlocks.forEach(blk => {
+      const tokens = blk.match(/[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+Tm|[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+T[dD]|\((?:\\.|[^\\)])*\)\s*Tj|\[(?:\\.|[^\]])*\]\s*TJ/g) || [];
+      tokens.forEach(tok => {
+        if (tok.endsWith('Tm')) {
+          const nums = tok.trim().split(/\s+/);
+          curX = Math.round(Number(nums[4]) || 0);
+          curY = Math.round(Number(nums[5]) || 0);
+        } else if (tok.endsWith('Td') || tok.endsWith('TD')) {
+          const nums = tok.trim().split(/\s+/);
+          curX += Math.round(Number(nums[0]) || 0);
+          curY += Math.round(Number(nums[1]) || 0);
+        } else if (tok.endsWith('Tj')) {
+          const inner = tok.slice(1, tok.lastIndexOf(')'));
+          const txt = unescapePdfStr(inner).trim();
+          if (txt) rawItems.push({ str: txt, x: curX, y: curY - (pageIdx - 1) * 5000, w: txt.length * 5 });
+        } else if (tok.endsWith('TJ')) {
+          const parts = [...tok.matchAll(/\((?:\\.|[^\\)])*\)/g)].map(m => unescapePdfStr(m[0].slice(1, -1)));
+          const txt = parts.join('').trim();
+          if (txt) rawItems.push({ str: txt, x: curX, y: curY - (pageIdx - 1) * 5000, w: txt.length * 5 });
+        }
+      });
+    });
+    pageIdx++;
+  }
+
+  rawItems.sort((a, b) => Math.abs(b.y - a.y) > 6 ? b.y - a.y : a.x - b.x);
+  const linesMap = [];
+  rawItems.forEach(item => {
+    const found = linesMap.find(l => Math.abs(l.y - item.y) <= 7);
+    if (found) found.items.push(item);
+    else linesMap.push({ y: item.y, items: [item] });
+  });
+  linesMap.forEach(l => l.items.sort((a, b) => a.x - b.x));
+  const structuredLines = linesMap.map(l => {
+    const mergedCells = [];
+    l.items.forEach(cell => {
+      const prev = mergedCells[mergedCells.length - 1];
+      if (prev && (cell.x - (prev.x + prev.w)) <= 4) {
+        prev.str = `${prev.str} ${cell.str}`.trim();
+        prev.w = (cell.x + cell.w) - prev.x;
+      } else {
+        mergedCells.push({ ...cell });
+      }
+    });
+    return { page: 1, y: l.y, rawY: l.y, text: mergedCells.map(c => c.str).join(' | '), cells: mergedCells };
+  });
+  return { structuredLines, extractedText: structuredLines.map(l => l.text).join('\n') };
+}
+
 async function processUploadedFile(file) {
   const targetName=(document.getElementById('import-target-name')?.value||'').trim();
   setImportStatus(`Analisi di "${file.name}" in corso...`);
@@ -1311,59 +1401,79 @@ async function processUploadedFile(file) {
     let extractedText='', collectedLines=[], imageBase64='', imageMimeType='';
     const isPdf=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
     if(isPdf) {
-      if(!window.pdfjsLib) throw new Error('PDF.js non disponibile.');
       const ab=await file.arrayBuffer();
-      let pdf;
-      try {
-        pdf = await pdfjsLib.getDocument(location.protocol === 'file:' ? { data: ab, disableWorker: true } : { data: ab }).promise;
-      } catch (_workerErr) {
-        pdf = await pdfjsLib.getDocument({ data: ab, disableWorker: true }).promise;
+      let pdf=null;
+      if(window.pdfjsLib) {
+        try {
+          pdf = await pdfjsLib.getDocument(location.protocol === 'file:' ? { data: ab, disableWorker: true } : { data: ab }).promise;
+        } catch (_workerErr) {
+          try {
+            pdf = await pdfjsLib.getDocument({ data: ab, disableWorker: true }).promise;
+          } catch (_fallbackErr) {
+            pdf = null;
+          }
+        }
       }
-      const pages=[];
-      for(let p=1;p<=pdf.numPages;p++) {
-        const page=await pdf.getPage(p), content=await page.getTextContent();
-        const rawItems=content.items.map(it=>({str:String(it.str||'').trim(),x:Math.round(it.transform[4]),y:Math.round(it.transform[5]),w:Math.round(it.width||0)})).filter(it=>it.str.length>0);
-        rawItems.sort((a,b)=>Math.abs(b.y-a.y)>6?b.y-a.y:a.x-b.x);
-        const linesMap=[];
-        rawItems.forEach(item=>{ const found=linesMap.find(l=>Math.abs(l.y-item.y)<=7); if(found) found.items.push(item); else linesMap.push({y:item.y,items:[item]}); });
-        linesMap.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
-        let pageLines=linesMap.map(l=>{
-          const mergedCells=[];
-          l.items.forEach(cell=>{
-            const prev=mergedCells[mergedCells.length-1];
-            if(prev&&(cell.x-(prev.x+prev.w))<=4){prev.str=`${prev.str} ${cell.str}`.trim();prev.w=(cell.x+cell.w)-prev.x;}
-            else{mergedCells.push({...cell});}
+      if (!pdf) {
+        setImportStatus('Estrazione PDF offline diretta in corso...');
+        const fb = await extractRawTextFromPdfBytes(ab);
+        collectedLines = fb.structuredLines;
+        extractedText = fb.extractedText;
+      } else {
+        const pages=[];
+        for(let p=1;p<=pdf.numPages;p++) {
+          const page=await pdf.getPage(p), content=await page.getTextContent();
+          const rawItems=content.items.map(it=>({str:String(it.str||'').trim(),x:Math.round(it.transform[4]),y:Math.round(it.transform[5]),w:Math.round(it.width||0)})).filter(it=>it.str.length>0);
+          rawItems.sort((a,b)=>Math.abs(b.y-a.y)>6?b.y-a.y:a.x-b.x);
+          const linesMap=[];
+          rawItems.forEach(item=>{ const found=linesMap.find(l=>Math.abs(l.y-item.y)<=7); if(found) found.items.push(item); else linesMap.push({y:item.y,items:[item]}); });
+          linesMap.forEach(l=>l.items.sort((a,b)=>a.x-b.x));
+          let pageLines=linesMap.map(l=>{
+            const mergedCells=[];
+            l.items.forEach(cell=>{
+              const prev=mergedCells[mergedCells.length-1];
+              if(prev&&(cell.x-(prev.x+prev.w))<=4){prev.str=`${prev.str} ${cell.str}`.trim();prev.w=(cell.x+cell.w)-prev.x;}
+              else{mergedCells.push({...cell});}
+            });
+            return{page:p,y:l.y-(p-1)*5000,rawY:l.y,text:mergedCells.map(c=>c.str).join(' | '),cells:mergedCells};
           });
-          return{page:p,y:l.y-(p-1)*5000,rawY:l.y,text:mergedCells.map(c=>c.str).join(' | '),cells:mergedCells};
-        });
-        let pageText=pageLines.map(l=>l.text).join('\n');
-        if(p===1&&state.aiConfig?.apiKey&&state.aiConfig.provider==='gemini') {
-          const vp=page.getViewport({scale:1.6}), cv=document.createElement('canvas');
-          cv.width=vp.width; cv.height=vp.height;
-          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-          imageBase64=cv.toDataURL('image/jpeg',0.85).split(',')[1]; imageMimeType='image/jpeg';
+          let pageText=pageLines.map(l=>l.text).join('\n');
+          if(p===1&&state.aiConfig?.apiKey&&state.aiConfig.provider==='gemini') {
+            const vp=page.getViewport({scale:1.6}), cv=document.createElement('canvas');
+            cv.width=vp.width; cv.height=vp.height;
+            await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+            imageBase64=cv.toDataURL('image/jpeg',0.85).split(',')[1]; imageMimeType='image/jpeg';
+          }
+          if(pageText.replace(/\s+/g,'').length<25&&window.Tesseract&&!imageBase64) {
+            try {
+              setImportStatus(`OCR 2D pagina ${p}/${pdf.numPages}...`);
+              const vp=page.getViewport({scale:2.0}), cv=document.createElement('canvas');
+              cv.width=vp.width; cv.height=vp.height;
+              await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+              const ocrRes=await Tesseract.recognize(cv,'ita');
+              pageText=(ocrRes?.data?.text)||'';
+              pageLines=tesseractDataToStructuredLines(ocrRes?.data, p);
+            } catch (ocrErr) {
+              console.warn('OCR fallback skipped:', ocrErr);
+            }
+          }
+          collectedLines.push(...pageLines); pages.push(pageText);
         }
-        if(pageText.replace(/\s+/g,'').length<25&&window.Tesseract&&!imageBase64) {
-          setImportStatus(`OCR 2D pagina ${p}/${pdf.numPages}...`);
-          const vp=page.getViewport({scale:2.0}), cv=document.createElement('canvas');
-          cv.width=vp.width; cv.height=vp.height;
-          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-          const ocrRes=await Tesseract.recognize(cv,'ita');
-          pageText=(ocrRes?.data?.text)||'';
-          pageLines=tesseractDataToStructuredLines(ocrRes?.data, p);
-        }
-        collectedLines.push(...pageLines); pages.push(pageText);
+        extractedText=pages.join('\n');
       }
-      extractedText=pages.join('\n');
     } else {
       if(state.aiConfig?.apiKey&&state.aiConfig.provider==='gemini') {
         const du=await readFileAsDataURL(file); imageBase64=du.split(',')[1]; imageMimeType=file.type||'image/jpeg';
       }
       if(!imageBase64&&window.Tesseract) {
-        setImportStatus('OCR 2D immagine in corso...');
-        const result=await Tesseract.recognize(file,'ita');
-        extractedText=(result?.data?.text)||'';
-        collectedLines=tesseractDataToStructuredLines(result?.data, 1);
+        try {
+          setImportStatus('OCR 2D immagine in corso...');
+          const result=await Tesseract.recognize(file,'ita');
+          extractedText=(result?.data?.text)||'';
+          collectedLines=tesseractDataToStructuredLines(result?.data, 1);
+        } catch (ocrErr) {
+          throw new Error('OCR bloccato dal browser in modalità file locale (file://) o rete assente. Usa "Incolla testo" oppure configura una chiave Gemini gratuita.');
+        }
       }
     }
     lastExtractedContext = { structuredLines: collectedLines, rawText: extractedText };
@@ -2033,6 +2143,8 @@ function saveLeaveAllowanceForm(e) {
   const fd = new FormData(e.target);
   state.leaveAllowanceDays = Math.max(0, Number(fd.get('leaveAllowanceDays')) || 0);
   state.law937AllowanceDays = Math.max(0, Number(fd.get('law937AllowanceDays')) || 0);
+  state.leaveAllowanceConfigured = true;
+  state.law937AllowanceConfigured = true;
   saveState(); closeModal(); renderCurrentView(); showToast('Giorni spettanti aggiornati.');
 }
 
